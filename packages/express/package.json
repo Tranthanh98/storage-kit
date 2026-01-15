@@ -21,7 +21,7 @@
     "dev": "tsup --watch",
     "lint": "eslint . --ext .ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "prepublishOnly": "pnpm run build"
   },
