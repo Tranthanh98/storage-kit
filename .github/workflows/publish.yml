@@ -5,14 +5,17 @@ on:
     branches:
       - release
 
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
-    
+
     permissions:
-      contents: read
-      id-token: write  # Required for OIDC token request
-    
+      contents: write
+      pull-requests: write
+      id-token: write # Required for OIDC trusted publishing
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,9 +28,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
-          cache: 'pnpm'
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -38,30 +41,14 @@ jobs:
       - name: Run tests
         run: pnpm -r test
 
-      - name: Publish packages with provenance
-        run: |
-          publish_if_needed() {
-            local pkg=$1
-            local name=$(node -p "require('./packages/$pkg/package.json').name")
-            local version=$(node -p "require('./packages/$pkg/package.json').version")
-            
-            # Check if this version already exists on npm
-            if npm view "$name@$version" version 2>/dev/null; then
-              echo "⏭️  $name@$version already published, skipping..."
-            else
-              echo "📦 Publishing $name@$version with provenance..."
-              pnpm --filter "$name" publish --access public --no-git-checks --provenance
-            fi
-          }
-          
-          # Publish in dependency order
-          publish_if_needed core
-          publish_if_needed client
-          publish_if_needed express
-          publish_if_needed fastify
-          publish_if_needed hono
-          publish_if_needed nestjs
+      - name: Create Release Pull Request or Publish
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          publish: pnpm release
+          version: pnpm version-packages
+          title: "chore: release packages"
+          commit: "chore: release packages"
         env:
-          # Use NPM_TOKEN for granular token approach
-          # Or remove this line entirely if using trusted publishing (OIDC)
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true

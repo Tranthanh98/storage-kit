@@ -9,7 +9,10 @@
     "lint": "pnpm -r run lint",
     "test": "pnpm -r run test",
     "typecheck": "pnpm -r run typecheck",
-    "clean": "pnpm -r exec rm -rf dist node_modules"
+    "clean": "pnpm -r exec rm -rf dist node_modules",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm -r publish --access public --no-git-checks --provenance"
   },
   "keywords": [
     "storage",
@@ -26,6 +29,7 @@
   },
   "packageManager": "pnpm@10.11.0",
   "devDependencies": {
+    "@changesets/cli": "^2.29.8",
     "@types/node": "^20.11.0",
     "tsup": "^8.0.1",
     "typescript": "^5.3.3",
