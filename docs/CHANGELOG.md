@@ -1,19 +1,13 @@
-# @storage-kit/core
-
-## 4.0.0
-
-### Major Changes
-
-- 0230a77: update multiple provider
-
-## 3.0.0
-
-### Major Changes
-
-- d23ddca: Support Google storage, aws s3, Azure storage, Digital Ocean Storage
+# storage-kit-docs
 
 ## 2.0.0
 
 ### Major Changes
 
-- 5c031b2: update readme to refection new method
+- 0230a77: update multiple provider
+
+## 1.0.0
+
+### Major Changes
+
+- d23ddca: Support Google storage, aws s3, Azure storage, Digital Ocean Storage

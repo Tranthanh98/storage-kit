@@ -1,6 +1,6 @@
 {
   "name": "@storage-kit/nestjs",
-  "version": "2.0.0",
+  "version": "4.0.0",
   "description": "NestJS module for Storage Kit - plug-and-play storage HTTP endpoints",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
