@@ -13,7 +13,8 @@ export type StorageErrorCode =
   | "UPLOAD_FAILED"
   | "DELETE_FAILED"
   | "SIGNED_URL_FAILED"
-  | "PROVIDER_ERROR";
+  | "PROVIDER_ERROR"
+  | "PROVIDER_NOT_CONFIGURED";
 
 /**
  * Standard error class for storage operations.

@@ -6,9 +6,10 @@
 
 import { Module, DynamicModule, Provider, type InjectionToken } from "@nestjs/common";
 import {
-  createStorageService,
+  BaseStorageKit,
   StorageHandler,
   type IStorageService,
+  type IStorageKitService,
   DEFAULT_MAX_FILE_SIZE,
 } from "@storage-kit/core";
 import { MulterModule } from "@nestjs/platform-express";
@@ -20,6 +21,7 @@ import {
   STORAGE_KIT_CONFIG,
   STORAGE_KIT_SERVICE,
   STORAGE_KIT_HANDLER,
+  STORAGE_KIT_INSTANCE,
 } from "./config";
 import { StorageKitService } from "./service";
 import { StorageKitController } from "./controller";
@@ -113,7 +115,7 @@ export class StorageKitModule {
         StorageKitService,
         StorageErrorFilter,
       ],
-      exports: [StorageKitService, STORAGE_KIT_SERVICE, STORAGE_KIT_HANDLER],
+      exports: [StorageKitService, STORAGE_KIT_SERVICE, STORAGE_KIT_HANDLER, STORAGE_KIT_INSTANCE],
     };
 
     if (config.global) {
@@ -152,7 +154,7 @@ export class StorageKitModule {
         StorageKitService,
         StorageErrorFilter,
       ],
-      exports: [StorageKitService, STORAGE_KIT_SERVICE, STORAGE_KIT_HANDLER],
+      exports: [StorageKitService, STORAGE_KIT_SERVICE, STORAGE_KIT_HANDLER, STORAGE_KIT_INSTANCE],
     };
 
     if (options.global) {
@@ -233,14 +235,16 @@ export class StorageKitModule {
    * Create synchronous providers.
    */
   private static createProviders(config: NestJSStorageKitConfig): Provider[] {
-    // Create storage service from config or use provided instance
-    const storage =
-      config.storage ??
-      createStorageService(config.provider, config as any);
-
+    // Create StorageKit instance which handles both single and multi-provider modes
+    const storageKit = new BaseStorageKit(config);
+    const storage = config.storage ?? storageKit.storage;
     const handler = new StorageHandler(storage, config);
 
     return [
+      {
+        provide: STORAGE_KIT_INSTANCE,
+        useValue: storageKit,
+      },
       {
         provide: STORAGE_KIT_SERVICE,
         useValue: storage,
@@ -308,14 +312,21 @@ export class StorageKitModule {
   private static createAsyncServiceProviders(): Provider[] {
     return [
       {
-        provide: STORAGE_KIT_SERVICE,
-        useFactory: (config: NestJSStorageKitConfig): IStorageService => {
-          return (
-            config.storage ??
-            createStorageService(config.provider, config as any)
-          );
+        provide: STORAGE_KIT_INSTANCE,
+        useFactory: (config: NestJSStorageKitConfig): IStorageKitService => {
+          return new BaseStorageKit(config);
         },
         inject: [STORAGE_KIT_CONFIG],
+      },
+      {
+        provide: STORAGE_KIT_SERVICE,
+        useFactory: (
+          storageKit: IStorageKitService,
+          config: NestJSStorageKitConfig
+        ): IStorageService => {
+          return config.storage ?? storageKit.storage;
+        },
+        inject: [STORAGE_KIT_INSTANCE, STORAGE_KIT_CONFIG],
       },
       {
         provide: STORAGE_KIT_HANDLER,

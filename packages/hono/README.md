@@ -55,6 +55,49 @@ export default app;
 
 **Swagger UI** is automatically available at `/api/storage/reference` - no additional setup required!
 
+## Multi-Provider Configuration
+
+Storage Kit supports configuring multiple storage providers and switching between them at runtime using `useProvider()`. This is useful for multi-region deployments, hybrid cloud strategies, and migrations.
+
+```typescript
+// store-kit.ts
+import { createStorageKit } from "@storage-kit/hono";
+
+export const storeKit = createStorageKit({
+  provider: "cloudflare-r2", // Default provider
+  providers: {
+    "cloudflare-r2": {
+      endpoint: "https://account.r2.cloudflarestorage.com",
+      accessKeyId: process.env.R2_ACCESS_KEY!,
+      secretAccessKey: process.env.R2_SECRET_KEY!,
+    },
+    s3: {
+      region: "us-east-1",
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    },
+    backblaze: {
+      endpoint: "https://s3.us-west-001.backblazeb2.com",
+      accessKeyId: process.env.B2_KEY_ID!,
+      secretAccessKey: process.env.B2_APP_KEY!,
+    },
+  },
+  defaultBucket: "uploads",
+});
+
+// Use default provider (r2)
+await storeKit.deleteFile("_", "old-file.png");
+
+// Switch to S3 for specific operation
+await storeKit.useProvider("s3").deleteFile("_", "archive-file.png");
+
+// Switch to Backblaze and get bucket-scoped service
+const backupBucket = storeKit.useProvider("backblaze").bucket("backups");
+await backupBucket.uploadFile(buffer, "daily-backup.zip");
+```
+
+See the [Multi-Provider Guide](https://tranthanh98.github.io/storage-kit/guide/multi-provider.html) for more details.
+
 ## Cloudflare Workers Example
 
 ```typescript

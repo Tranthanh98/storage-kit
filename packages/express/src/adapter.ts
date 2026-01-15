@@ -10,7 +10,6 @@ import {
   mapAnyErrorToResponse,
   StorageError,
   StorageHandler,
-  type IStorageKitService,
   type IStorageService,
   type StorageKitConfig,
   type UploadedFile,
@@ -161,10 +160,7 @@ function normalizeSwaggerConfig(
  * const result = await storeKit.getPresignedUploadUrl("_", "files/image.png");
  * ```
  */
-export class ExpressStorageKit
-  extends BaseStorageKit
-  implements IStorageKitService
-{
+export class ExpressStorageKit extends BaseStorageKit {
   private readonly swaggerConfig: Required<SwaggerOptions>;
   private cachedRouter: Router | null = null;
 

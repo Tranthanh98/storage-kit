@@ -15,7 +15,7 @@ npm install @storage-kit/hono hono
 pnpm add @storage-kit/hono hono
 ```
 
-## Unified API (Recommended) ✨
+## Unified API (Recommended)
 
 The recommended approach is to use `createStorageKit()` for centralized initialization.
 
@@ -44,6 +44,43 @@ app.route("/api/storage", storeKit.routeHandler());
 
 export default app;
 ```
+
+## Multi-Provider Configuration
+
+Storage Kit supports configuring multiple storage providers and switching between them at runtime:
+
+```typescript
+import { createStorageKit } from "@storage-kit/hono";
+
+const storeKit = createStorageKit({
+  provider: "cloudflare-r2", // Default provider
+  providers: {
+    "cloudflare-r2": {
+      endpoint: "https://account.r2.cloudflarestorage.com",
+      accessKeyId: process.env.R2_ACCESS_KEY!,
+      secretAccessKey: process.env.R2_SECRET_KEY!,
+    },
+    s3: {
+      region: "us-east-1",
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    },
+  },
+  defaultBucket: "uploads",
+});
+
+// Use default provider (r2)
+await storeKit.deleteFile("_", "file.png");
+
+// Switch to S3 for specific operation
+await storeKit.useProvider("s3").deleteFile("_", "archive-file.png");
+
+// Get bucket-scoped service for a provider
+const s3Archives = storeKit.useProvider("s3").bucket("archives");
+await s3Archives.uploadFile(buffer, "backup.zip");
+```
+
+See the [Multi-Provider Guide](/guide/multi-provider) for more details.
 
 ## Cloudflare Workers Example
 

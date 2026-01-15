@@ -75,3 +75,9 @@ export const STORAGE_KIT_SERVICE = "STORAGE_KIT_SERVICE";
  * Injection token for Storage Kit handler.
  */
 export const STORAGE_KIT_HANDLER = "STORAGE_KIT_HANDLER";
+
+/**
+ * Injection token for Storage Kit instance (IStorageKitService).
+ * Use this to access multi-provider features like useProvider().
+ */
+export const STORAGE_KIT_INSTANCE = "STORAGE_KIT_INSTANCE";

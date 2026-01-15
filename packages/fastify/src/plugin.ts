@@ -5,20 +5,15 @@
  */
 
 import {
-  type BulkDeleteResponse,
-  createStorageService,
+  BaseStorageKit,
   DEFAULT_MAX_FILE_SIZE,
-  type FileUploadResponse,
-  type HealthCheckResponse,
-  type IStorageService,
   mapAnyErrorToResponse,
-  type SignedUrlOptions,
-  type SignedUrlResponse,
   StorageError,
   StorageHandler,
+  type IStorageService,
+  type IStorageKitService,
   type StorageKitConfig,
   type UploadedFile,
-  type UploadOptions,
 } from "@storage-kit/core";
 import type {
   FastifyInstance,
@@ -120,43 +115,15 @@ function normalizeSwaggerConfig(
 /**
  * Service interface for Fastify Storage Kit.
  */
-export interface IFastifyStorageKitService {
-  /** Get the underlying storage service */
-  readonly storage: IStorageService;
-  /** Upload a file */
-  uploadFile(
-    bucket: string,
-    file: Buffer | Uint8Array,
-    fileName: string,
-    pathFolder?: string,
-    options?: UploadOptions
-  ): Promise<FileUploadResponse>;
-  /** Delete a single file */
-  deleteFile(bucket: string, key: string): Promise<void>;
-  /** Delete multiple files */
-  deleteFiles(bucket: string, keys: string[]): Promise<BulkDeleteResponse>;
-  /** Generate a presigned URL for upload */
-  getPresignedUploadUrl(
-    bucket: string,
-    key: string,
-    options?: SignedUrlOptions
-  ): Promise<SignedUrlResponse>;
-  /** Generate a presigned URL for download */
-  getPresignedDownloadUrl(
-    bucket: string,
-    key: string,
-    options?: Pick<SignedUrlOptions, "expiresIn">
-  ): Promise<SignedUrlResponse>;
-  /** Health check */
-  healthCheck(): Promise<HealthCheckResponse>;
-  /** Get a bucket-scoped service */
-  bucket(bucketName: string): IStorageService;
+export interface IFastifyStorageKitService extends IStorageKitService {
   /** Get the Fastify plugin */
   plugin(): FastifyPluginAsync<{ prefix?: string }>;
 }
 
 /**
  * Fastify Storage Kit - Unified storage instance with plugin and service methods.
+ *
+ * Extends BaseStorageKit to inherit multi-provider support.
  *
  * @example
  * ```typescript
@@ -180,113 +147,29 @@ export interface IFastifyStorageKitService {
  *
  * // Use as service
  * const result = await storeKit.getPresignedUploadUrl("_", "files/image.png");
+ *
+ * // Multi-provider usage
+ * await storeKit.useProvider("r2").bucket("images").deleteFile("photo.jpg");
  * ```
  */
-export class FastifyStorageKit implements IFastifyStorageKitService {
-  private readonly _storage: IStorageService;
-  private readonly _config: FastifyStorageKitConfig;
+export class FastifyStorageKit
+  extends BaseStorageKit
+  implements IFastifyStorageKitService
+{
   private readonly swaggerConfig: Required<SwaggerOptions>;
 
   constructor(config: FastifyStorageKitConfig) {
-    this._config = config;
-    this.swaggerConfig = normalizeSwaggerConfig(config.swagger);
-
-    // Create storage service from config or use provided instance
-    this._storage =
-      config.storage ??
-      createStorageService(config.provider, config as any);
-  }
-
-  get storage(): IStorageService {
-    return this._storage;
-  }
-
-  get config(): FastifyStorageKitConfig {
-    return this._config;
+    super(config);
+    this.swaggerConfig = normalizeSwaggerConfig(
+      (config as FastifyStorageKitConfig).swagger
+    );
   }
 
   /**
-   * Resolve bucket name ("_" means use defaultBucket).
+   * Get the Fastify-specific configuration.
    */
-  private resolveBucket(bucket: string): string {
-    if (bucket === "_" && this._config.defaultBucket) {
-      return this._config.defaultBucket;
-    }
-    if (bucket === "_" && !this._config.defaultBucket) {
-      throw new StorageError(
-        "MISSING_REQUIRED_PARAM",
-        "Bucket parameter is '_' but no defaultBucket is configured",
-        { parameter: "bucket" }
-      );
-    }
-    return bucket;
-  }
-
-  async uploadFile(
-    bucket: string,
-    file: Buffer | Uint8Array,
-    fileName: string,
-    pathFolder?: string,
-    options?: UploadOptions
-  ): Promise<FileUploadResponse> {
-    const resolvedBucket = this.resolveBucket(bucket);
-    const result = await this._storage
-      .getBucket(resolvedBucket)
-      .uploadFile(file, fileName, pathFolder, options);
-
-    if (this._config.onUploadComplete) {
-      this._config.onUploadComplete({
-        url: result.url,
-        key: result.key,
-        bucket: resolvedBucket,
-      });
-    }
-
-    return result;
-  }
-
-  async deleteFile(bucket: string, key: string): Promise<void> {
-    const resolvedBucket = this.resolveBucket(bucket);
-    await this._storage.getBucket(resolvedBucket).deleteFile(key);
-  }
-
-  async deleteFiles(
-    bucket: string,
-    keys: string[]
-  ): Promise<BulkDeleteResponse> {
-    const resolvedBucket = this.resolveBucket(bucket);
-    return await this._storage.getBucket(resolvedBucket).deleteFiles(keys);
-  }
-
-  async getPresignedUploadUrl(
-    bucket: string,
-    key: string,
-    options?: SignedUrlOptions
-  ): Promise<SignedUrlResponse> {
-    const resolvedBucket = this.resolveBucket(bucket);
-    return await this._storage
-      .getBucket(resolvedBucket)
-      .getPresignedUploadUrl(key, options);
-  }
-
-  async getPresignedDownloadUrl(
-    bucket: string,
-    key: string,
-    options?: Pick<SignedUrlOptions, "expiresIn">
-  ): Promise<SignedUrlResponse> {
-    const resolvedBucket = this.resolveBucket(bucket);
-    return await this._storage
-      .getBucket(resolvedBucket)
-      .getPresignedDownloadUrl(key, options);
-  }
-
-  async healthCheck(): Promise<HealthCheckResponse> {
-    return await this._storage.healthCheck();
-  }
-
-  bucket(bucketName: string): IStorageService {
-    const resolvedBucket = this.resolveBucket(bucketName);
-    return this._storage.getBucket(resolvedBucket);
+  get fastifyConfig(): FastifyStorageKitConfig {
+    return this._config as FastifyStorageKitConfig;
   }
 
   /**
@@ -301,7 +184,7 @@ export class FastifyStorageKit implements IFastifyStorageKitService {
    */
   plugin(): FastifyPluginAsync<{ prefix?: string }> {
     const storage = this._storage;
-    const config = this._config;
+    const config = this.fastifyConfig;
     const swaggerConfig = this.swaggerConfig;
 
     const pluginFn: FastifyPluginAsync<{ prefix?: string }> = async (

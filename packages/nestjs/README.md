@@ -29,6 +29,71 @@ import { StorageKitModule } from "@storage-kit/nestjs";
 export class AppModule {}
 ```
 
+## Multi-Provider Configuration
+
+Storage Kit supports configuring multiple storage providers and switching between them at runtime using `useProvider()`. This is useful for multi-region deployments, hybrid cloud strategies, and migrations.
+
+```typescript
+import { Module } from "@nestjs/common";
+import { StorageKitModule } from "@storage-kit/nestjs";
+
+@Module({
+  imports: [
+    StorageKitModule.forRoot({
+      provider: "minio", // Default provider
+      providers: {
+        minio: {
+          endpoint: "http://localhost:9000",
+          accessKeyId: "minioadmin",
+          secretAccessKey: "minioadmin",
+        },
+        "cloudflare-r2": {
+          endpoint: "https://account.r2.cloudflarestorage.com",
+          accessKeyId: process.env.R2_ACCESS_KEY!,
+          secretAccessKey: process.env.R2_SECRET_KEY!,
+        },
+        s3: {
+          region: "us-east-1",
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+        },
+      },
+      defaultBucket: "uploads",
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+### Using `useProvider()` in Services
+
+```typescript
+import { Injectable } from "@nestjs/common";
+import { StorageKitService } from "@storage-kit/nestjs";
+
+@Injectable()
+export class FileService {
+  constructor(private readonly storage: StorageKitService) {}
+
+  async uploadToCDN(file: Buffer, filename: string) {
+    // Use R2 for CDN-served files
+    return this.storage.useProvider("cloudflare-r2").uploadFile("cdn", file, filename);
+  }
+
+  async archiveFile(file: Buffer, filename: string) {
+    // Use S3 for archives
+    return this.storage.useProvider("s3").uploadFile("archives", file, filename);
+  }
+
+  async deleteFromDefault(key: string) {
+    // Use default provider (minio)
+    return this.storage.handleDelete("uploads", key);
+  }
+}
+```
+
+See the [Multi-Provider Guide](https://tranthanh98.github.io/storage-kit/guide/multi-provider.html) for more details.
+
 ## Setting up Swagger UI
 
 The module includes built-in Swagger UI support. Call `setupSwagger` in your `main.ts`:

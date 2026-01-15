@@ -12,6 +12,10 @@ A **Provider** is the underlying storage backend. Storage Kit supports any S3-co
 - `azure` (Azure Blob Storage)
 - `spaces` (DigitalOcean Spaces)
 
+### Multi-Provider Mode
+
+Storage Kit supports configuring multiple providers and switching between them at runtime using `useProvider()`. This is useful for multi-region deployments, hybrid cloud strategies, and migrations. See [Multi-Provider Configuration](./multi-provider.md) for details.
+
 ## Bucket
 
 A **Bucket** is a container for objects (files). Think of it like a root folder or a drive.
