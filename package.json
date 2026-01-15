@@ -1,0 +1,34 @@
+{
+  "name": "storage-kit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A unified, framework-agnostic storage service for S3-compatible providers",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "dev": "pnpm -r run dev",
+    "lint": "pnpm -r run lint",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck",
+    "clean": "pnpm -r exec rm -rf dist node_modules"
+  },
+  "keywords": [
+    "storage",
+    "s3",
+    "minio",
+    "backblaze",
+    "cloudflare-r2",
+    "object-storage"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "packageManager": "pnpm@10.11.0",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "name": "@storage-kit/fastify",
+  "version": "1.0.0",
+  "description": "Fastify plugin for Storage Kit - plug-and-play storage HTTP endpoints",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint . --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm run build"
+  },
+  "keywords": [
+    "storage-kit",
+    "fastify",
+    "s3",
+    "file-upload",
+    "multipart",
+    "plugin"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@storage-kit/core": "workspace:*",
+    "@fastify/multipart": "^8.0.0",
+    "@fastify/swagger": "^8.14.0",
+    "@fastify/swagger-ui": "^3.0.0",
+    "yaml": "^2.3.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "fastify": "^4.24.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  },
+  "peerDependencies": {
+    "fastify": "^4.0.0 || ^5.0.0"
+  }
+}

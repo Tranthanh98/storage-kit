@@ -1,0 +1,57 @@
+{
+  "name": "@storage-kit/hono",
+  "version": "1.0.0",
+  "description": "Hono adapter for Storage Kit - edge-compatible storage HTTP endpoints",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint . --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm run build"
+  },
+  "keywords": [
+    "storage-kit",
+    "hono",
+    "s3",
+    "file-upload",
+    "edge",
+    "cloudflare-workers",
+    "middleware"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@storage-kit/core": "workspace:*",
+    "@hono/swagger-ui": "^0.4.0",
+    "yaml": "^2.3.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "hono": "^4.0.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  },
+  "peerDependencies": {
+    "hono": "^4.0.0"
+  }
+}

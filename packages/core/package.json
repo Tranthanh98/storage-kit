@@ -1,0 +1,77 @@
+{
+  "name": "@storage-kit/core",
+  "version": "1.0.0",
+  "description": "Core storage service for S3-compatible providers (MinIO, Backblaze B2, Cloudflare R2)",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./openapi": "./openapi/storage-api.yaml",
+    "./openapi/storage-api.yaml": "./openapi/storage-api.yaml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "openapi",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "validate:openapi": "npx -y swagger-cli validate openapi/storage-api.yaml",
+    "prepublishOnly": "pnpm run build"
+  },
+  "keywords": [
+    "storage",
+    "s3",
+    "minio",
+    "backblaze",
+    "b2",
+    "cloudflare",
+    "r2",
+    "object-storage",
+    "file-upload",
+    "presigned-url"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.968.0",
+    "@aws-sdk/s3-request-presigner": "^3.968.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  },
+  "peerDependencies": {
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/s3-request-presigner": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@aws-sdk/client-s3": {
+      "optional": false
+    },
+    "@aws-sdk/s3-request-presigner": {
+      "optional": false
+    }
+  }
+}

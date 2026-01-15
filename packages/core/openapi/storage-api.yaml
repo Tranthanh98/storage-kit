@@ -1,0 +1,548 @@
+openapi: 3.0.3
+info:
+  title: Storage Kit API
+  description: |
+    A unified HTTP API for S3-compatible storage providers (MinIO, Backblaze B2, Cloudflare R2).
+    
+    This specification defines a framework-agnostic API contract for file storage operations
+    that can be implemented with any HTTP framework (Express, Fastify, Hono, etc.).
+    
+    ## Features
+    - File upload via multipart/form-data
+    - Single and bulk file deletion
+    - Presigned URL generation for direct uploads/downloads
+    - Consistent error responses across all endpoints
+    
+    ## Authentication
+    Authentication is not defined in this spec and should be handled by the consuming application.
+  version: 1.0.0
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: /
+    description: Default (relative to application root)
+
+tags:
+  - name: Files
+    description: File upload and deletion operations
+  - name: Signed URLs
+    description: Presigned URL generation for direct client access
+  - name: Health
+    description: Service health checks
+
+paths:
+  /storage/{bucket}/files:
+    post:
+      tags:
+        - Files
+      summary: Upload a file
+      description: |
+        Upload a file to the specified bucket using multipart/form-data.
+        The file will be stored with the original filename or under a folder prefix if specified.
+      operationId: uploadFile
+      parameters:
+        - $ref: '#/components/parameters/BucketParam'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FileUploadRequest'
+      responses:
+        '201':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileUploadResponse'
+              example:
+                url: "https://storage.example.com/my-bucket/avatars/user123/profile.png"
+                key: "avatars/user123/profile.png"
+        '400':
+          description: Bad request - missing file or invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingFile:
+                  summary: Missing file in request
+                  value:
+                    error:
+                      code: MISSING_FILE
+                      message: "The request must contain a 'file' field"
+                      details: {}
+        '404':
+          description: Bucket not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: BUCKET_NOT_FOUND
+                  message: "The specified bucket does not exist"
+                  details:
+                    bucket: "my-bucket"
+        '500':
+          description: Upload failed due to server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: UPLOAD_FAILED
+                  message: "Failed to upload file to storage"
+                  details: {}
+
+    delete:
+      tags:
+        - Files
+      summary: Bulk delete files
+      description: |
+        Delete multiple files from the specified bucket in a single request.
+        Returns the count of successfully deleted files and any failures.
+      operationId: bulkDeleteFiles
+      parameters:
+        - $ref: '#/components/parameters/BucketParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkDeleteRequest'
+            example:
+              keys:
+                - "folder/file1.png"
+                - "folder/file2.png"
+                - "image.jpg"
+      responses:
+        '200':
+          description: Bulk delete completed (may include partial failures)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkDeleteResponse'
+              examples:
+                fullSuccess:
+                  summary: All files deleted successfully
+                  value:
+                    deleted: 3
+                    failed: []
+                partialSuccess:
+                  summary: Some files failed to delete
+                  value:
+                    deleted: 2
+                    failed:
+                      - key: "missing-file.png"
+                        reason: FILE_NOT_FOUND
+        '400':
+          description: Bad request - empty or invalid keys array
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                emptyKeys:
+                  summary: Empty keys array
+                  value:
+                    error:
+                      code: EMPTY_KEYS_ARRAY
+                      message: "The 'keys' array must not be empty"
+                      details: {}
+                keysLimitExceeded:
+                  summary: Too many keys
+                  value:
+                    error:
+                      code: KEYS_LIMIT_EXCEEDED
+                      message: "The 'keys' array must not exceed 1000 items"
+                      details:
+                        provided: 1500
+                        maximum: 1000
+        '404':
+          description: Bucket not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /storage/{bucket}/files/{filePath}:
+    delete:
+      tags:
+        - Files
+      summary: Delete a single file
+      description: |
+        Delete a single file from the specified bucket.
+        The file path should be URL-encoded if it contains slashes or special characters.
+      operationId: deleteFile
+      parameters:
+        - $ref: '#/components/parameters/BucketParam'
+        - $ref: '#/components/parameters/FilePathParam'
+      responses:
+        '204':
+          description: File deleted successfully
+        '404':
+          description: File or bucket not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                fileNotFound:
+                  summary: File not found
+                  value:
+                    error:
+                      code: FILE_NOT_FOUND
+                      message: "The requested file does not exist"
+                      details:
+                        key: "folder/file.png"
+                        bucket: "my-bucket"
+                bucketNotFound:
+                  summary: Bucket not found
+                  value:
+                    error:
+                      code: BUCKET_NOT_FOUND
+                      message: "The specified bucket does not exist"
+                      details:
+                        bucket: "my-bucket"
+        '500':
+          description: Delete failed due to server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: DELETE_FAILED
+                  message: "Failed to delete file from storage"
+                  details: {}
+
+  /storage/{bucket}/signed-url:
+    get:
+      tags:
+        - Signed URLs
+      summary: Generate a presigned URL
+      description: |
+        Generate a presigned URL for direct upload (PUT) or download (GET) operations.
+        This allows clients to upload or download files directly to/from storage
+        without exposing credentials.
+      operationId: getSignedUrl
+      parameters:
+        - $ref: '#/components/parameters/BucketParam'
+        - name: key
+          in: query
+          required: true
+          description: The file key (path) for the presigned URL
+          schema:
+            type: string
+          example: "avatars/user123/profile.png"
+        - name: type
+          in: query
+          required: true
+          description: The type of presigned URL to generate
+          schema:
+            type: string
+            enum:
+              - upload
+              - download
+          example: "upload"
+        - name: expiresIn
+          in: query
+          required: false
+          description: |
+            URL expiration time in seconds. Default varies by provider (typically 300-3600).
+            Maximum allowed value is 604800 (7 days).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 604800
+            default: 3600
+          example: 3600
+        - name: contentType
+          in: query
+          required: false
+          description: |
+            Content-Type for upload presigned URLs. The upload must use this content type.
+            Only applicable when type=upload.
+          schema:
+            type: string
+          example: "image/png"
+      responses:
+        '200':
+          description: Presigned URL generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignedUrlResponse'
+              examples:
+                uploadUrl:
+                  summary: Upload presigned URL
+                  value:
+                    signedUrl: "https://storage.example.com/my-bucket/file.png?X-Amz-Algorithm=..."
+                    publicUrl: "https://storage.example.com/my-bucket/file.png"
+                    expiresAt: "2024-01-15T12:30:00.000Z"
+                downloadUrl:
+                  summary: Download presigned URL
+                  value:
+                    signedUrl: "https://storage.example.com/my-bucket/file.png?X-Amz-Algorithm=..."
+                    expiresAt: "2024-01-15T12:30:00.000Z"
+        '400':
+          description: Bad request - missing or invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingParam:
+                  summary: Missing required parameter
+                  value:
+                    error:
+                      code: MISSING_REQUIRED_PARAM
+                      message: "The 'key' query parameter is required"
+                      details:
+                        parameter: "key"
+                invalidType:
+                  summary: Invalid type parameter
+                  value:
+                    error:
+                      code: INVALID_SIGNED_URL_TYPE
+                      message: "The 'type' parameter must be 'upload' or 'download'"
+                      details:
+                        provided: "invalid"
+                        allowed:
+                          - "upload"
+                          - "download"
+        '404':
+          description: Bucket not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to generate presigned URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: SIGNED_URL_FAILED
+                  message: "Failed to generate presigned URL"
+                  details: {}
+
+  /storage/health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: |
+        Check the health status of the storage provider connection.
+        This endpoint is optional and can be used for monitoring and readiness checks.
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Storage provider is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "healthy"
+                provider: "minio"
+        '503':
+          description: Storage provider is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "unhealthy"
+                error: "Connection refused"
+
+components:
+  parameters:
+    BucketParam:
+      name: bucket
+      in: path
+      required: true
+      description: The name of the storage bucket
+      schema:
+        type: string
+        pattern: '^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$'
+      example: "my-bucket"
+
+    FilePathParam:
+      name: filePath
+      in: path
+      required: true
+      description: |
+        The file path (key) within the bucket. 
+        Must be URL-encoded for paths containing slashes (e.g., folder%2Ffile.png).
+      schema:
+        type: string
+      example: "folder%2Fsubfolder%2Fimage.png"
+
+  schemas:
+    FileUploadRequest:
+      type: object
+      required:
+        - file
+      properties:
+        file:
+          type: string
+          format: binary
+          description: The file to upload
+        path:
+          type: string
+          description: Optional folder path prefix (e.g., "avatars/user123")
+          example: "avatars/user123"
+        contentType:
+          type: string
+          description: Optional MIME type override
+          example: "image/png"
+
+    FileUploadResponse:
+      type: object
+      required:
+        - url
+        - key
+      properties:
+        url:
+          type: string
+          format: uri
+          description: The public URL of the uploaded file
+          example: "https://storage.example.com/my-bucket/avatars/user123/profile.png"
+        key:
+          type: string
+          description: The storage key (path) of the uploaded file
+          example: "avatars/user123/profile.png"
+
+    BulkDeleteRequest:
+      type: object
+      required:
+        - keys
+      properties:
+        keys:
+          type: array
+          description: Array of file keys to delete (maximum 1000)
+          minItems: 1
+          maxItems: 1000
+          items:
+            type: string
+          example:
+            - "folder/file1.png"
+            - "folder/file2.png"
+
+    BulkDeleteResponse:
+      type: object
+      required:
+        - deleted
+        - failed
+      properties:
+        deleted:
+          type: integer
+          description: Number of successfully deleted files
+          minimum: 0
+          example: 2
+        failed:
+          type: array
+          description: Array of files that failed to delete
+          items:
+            type: object
+            required:
+              - key
+              - reason
+            properties:
+              key:
+                type: string
+                description: The file key that failed
+                example: "missing-file.png"
+              reason:
+                type: string
+                description: Error code explaining the failure
+                example: "FILE_NOT_FOUND"
+
+    SignedUrlResponse:
+      type: object
+      required:
+        - signedUrl
+        - expiresAt
+      properties:
+        signedUrl:
+          type: string
+          format: uri
+          description: The presigned URL for upload (PUT) or download (GET)
+          example: "https://storage.example.com/bucket/file.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&..."
+        publicUrl:
+          type: string
+          format: uri
+          description: The eventual public URL of the file (only included for upload type)
+          example: "https://storage.example.com/bucket/file.png"
+        expiresAt:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the presigned URL expires
+          example: "2024-01-15T12:30:00.000Z"
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - healthy
+            - unhealthy
+          description: Health status of the storage provider
+          example: "healthy"
+        provider:
+          type: string
+          description: Name of the storage provider (included when healthy)
+          example: "minio"
+        error:
+          type: string
+          description: Error message (included when unhealthy)
+          example: "Connection refused"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Machine-readable error code
+              enum:
+                - BUCKET_NOT_FOUND
+                - FILE_NOT_FOUND
+                - MISSING_FILE
+                - MISSING_REQUIRED_PARAM
+                - INVALID_SIGNED_URL_TYPE
+                - EMPTY_KEYS_ARRAY
+                - KEYS_LIMIT_EXCEEDED
+                - UPLOAD_FAILED
+                - DELETE_FAILED
+                - SIGNED_URL_FAILED
+                - PROVIDER_ERROR
+              example: "FILE_NOT_FOUND"
+            message:
+              type: string
+              description: Human-readable error description
+              example: "The requested file does not exist"
+            details:
+              type: object
+              additionalProperties: true
+              description: Additional context about the error
+              example:
+                key: "folder/file.png"
+                bucket: "my-bucket"

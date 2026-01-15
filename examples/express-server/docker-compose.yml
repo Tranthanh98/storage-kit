@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: storage-kit-minio
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Optional: Create a default bucket on startup
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin;
+      mc mb local/test-bucket --ignore-existing;
+      mc anonymous set download local/test-bucket;
+      echo 'Bucket test-bucket created successfully';
+      "
+
+volumes:
+  minio-data:
