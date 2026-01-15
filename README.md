@@ -13,26 +13,67 @@ A unified, framework-agnostic storage service for S3-compatible providers (MinIO
 
 ## Packages
 
-| Package                | Description                        |
-| ---------------------- | ---------------------------------- |
-| `@storage-kit/core`    | Core storage service and utilities |
-| `@storage-kit/express` | Express.js adapter                 |
-| `@storage-kit/fastify` | Fastify adapter                    |
-| `@storage-kit/hono`    | Hono adapter (edge-compatible)     |
-| `@storage-kit/nestjs`  | NestJS module                      |
+| Package                | Description                                    |
+| ---------------------- | ---------------------------------------------- |
+| `@storage-kit/core`    | Core storage service and utilities             |
+| `@storage-kit/client`  | Frontend client SDK (React, Vue, React Native) |
+| `@storage-kit/express` | Express.js adapter                             |
+| `@storage-kit/fastify` | Fastify adapter                                |
+| `@storage-kit/hono`    | Hono adapter (edge-compatible)                 |
+| `@storage-kit/nestjs`  | NestJS module                                  |
 
 ## Quick Start
 
-### Option 1: Framework Adapter (Recommended)
+### Option 1: Client SDK (Frontend)
 
-The fastest way to get started is using a framework adapter. Choose your framework:
+For frontend applications (React, Vue, React Native, Angular):
+
+```bash
+npm install @storage-kit/client
+```
+
+```typescript
+import { createStorageClient } from "@storage-kit/client";
+
+const storage = createStorageClient({
+  baseURL: "http://localhost:3000/api/storage",
+  headers: { Authorization: `Bearer ${token}` },
+});
+
+// Upload a file
+const { data, error } = await storage.upload({
+  bucket: "avatars",
+  file: file,
+  path: "users/123",
+});
+
+if (error) {
+  console.error(error.code, error.message);
+} else {
+  console.log("Uploaded:", data.url);
+}
+
+// Get signed URL for large file upload
+const { data } = await storage.getSignedUrl({
+  bucket: "uploads",
+  key: "video.mp4",
+  type: "upload",
+  contentType: "video/mp4",
+});
+```
+
+See [@storage-kit/client README](./packages/client/README.md) for complete API reference.
+
+### Option 2: Framework Adapter (Recommended)
+
+The fastest way to get started on the backend is using a framework adapter. Choose your framework:
 
 - [Express](#express-integration)
 - [Fastify](#fastify-integration)
 - [Hono](#hono-integration)
 - [NestJS](#nestjs-integration)
 
-### Option 2: Core Library Only
+### Option 3: Core Library Only
 
 For custom implementations or non-HTTP use cases:
 
