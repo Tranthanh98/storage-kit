@@ -7,16 +7,21 @@
  */
 
 export {
-  storageKit,
+  ExpressStorageKit,
+  // New unified API (recommended)
+  createStorageKit,
   storageErrorHandler,
+  // Legacy API (deprecated, kept for backward compatibility)
+  storageKit,
   type ExpressStorageKitConfig,
   type SwaggerOptions,
 } from "./src/adapter";
 
 // Re-export core types for convenience
 export type {
-  StorageKitConfig,
-  UploadedFile,
-  StorageProvider,
   HttpErrorResponse,
+  IStorageKitService,
+  StorageKitConfig,
+  StorageProvider,
+  UploadedFile,
 } from "@storage-kit/core";

@@ -4,32 +4,28 @@
  * Provides plug-and-play Express router for storage operations.
  */
 
-import { Router, type Request, type Response, type NextFunction } from "express";
-import multer from "multer";
-import swaggerUi from "swagger-ui-express";
-import { readFileSync } from "fs";
-import { parse } from "yaml";
-import { dirname, resolve } from "path";
 import {
-  createStorageService,
-  StorageHandler,
+  BaseStorageKit,
+  DEFAULT_MAX_FILE_SIZE,
   mapAnyErrorToResponse,
+  StorageError,
+  StorageHandler,
+  type IStorageKitService,
+  type IStorageService,
   type StorageKitConfig,
   type UploadedFile,
-  type IStorageService,
-  StorageError,
-  DEFAULT_MAX_FILE_SIZE,
 } from "@storage-kit/core";
-
-/**
- * Express-specific configuration options.
- */
-export interface ExpressStorageKitConfig extends StorageKitConfig {
-  /** Custom storage service instance (overrides provider config) */
-  storage?: IStorageService;
-  /** Enable Swagger UI at /reference (default: true) */
-  swagger?: boolean | SwaggerOptions;
-}
+import {
+  Router,
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
+import { readFileSync } from "fs";
+import multer from "multer";
+import { dirname, resolve } from "path";
+import swaggerUi from "swagger-ui-express";
+import { parse } from "yaml";
 
 /**
  * Swagger UI customization options.
@@ -41,6 +37,16 @@ export interface SwaggerOptions {
   path?: string;
   /** Custom title for Swagger UI */
   title?: string;
+}
+
+/**
+ * Express-specific configuration options.
+ */
+export interface ExpressStorageKitConfig extends StorageKitConfig {
+  /** Custom storage service instance (overrides provider config) */
+  storage?: IStorageService;
+  /** Enable Swagger UI at /reference (default: true) */
+  swagger?: boolean | SwaggerOptions;
 }
 
 /**
@@ -100,15 +106,339 @@ function loadOpenApiSpec(basePath: string): object {
 }
 
 /**
+ * Normalize swagger configuration to SwaggerOptions.
+ */
+function normalizeSwaggerConfig(
+  swagger?: boolean | SwaggerOptions
+): Required<SwaggerOptions> {
+  if (swagger === false) {
+    return {
+      enabled: false,
+      path: "/reference",
+      title: "Storage Kit API Reference",
+    };
+  }
+  if (swagger === true || swagger === undefined) {
+    return {
+      enabled: true,
+      path: "/reference",
+      title: "Storage Kit API Reference",
+    };
+  }
+  return {
+    enabled: swagger.enabled !== false,
+    path: swagger.path || "/reference",
+    title: swagger.title || "Storage Kit API Reference",
+  };
+}
+
+/**
+ * Express Storage Kit - Unified storage instance with route handler and service methods.
+ *
+ * This class provides a unified API for both:
+ * 1. Route handling via `routeHandler()` for HTTP endpoints
+ * 2. Service methods like `uploadFile()`, `getPresignedUploadUrl()` for programmatic access
+ *
+ * @example
+ * ```typescript
+ * // store-kit.ts - Centralized initialization
+ * import { createStorageKit } from "@storage-kit/express";
+ *
+ * export const storeKit = createStorageKit({
+ *   provider: "minio",
+ *   endpoint: "http://localhost:9000",
+ *   accessKeyId: "minioadmin",
+ *   secretAccessKey: "minioadmin",
+ *   defaultBucket: "my-bucket",
+ * });
+ *
+ * // index.ts - Use as route handler
+ * import { storeKit } from "./store-kit";
+ * app.use("/api/storage", storeKit.routeHandler());
+ *
+ * // service.ts - Use as service
+ * import { storeKit } from "./store-kit";
+ * const result = await storeKit.getPresignedUploadUrl("_", "files/image.png");
+ * ```
+ */
+export class ExpressStorageKit
+  extends BaseStorageKit
+  implements IStorageKitService
+{
+  private readonly swaggerConfig: Required<SwaggerOptions>;
+  private cachedRouter: Router | null = null;
+
+  constructor(config: ExpressStorageKitConfig) {
+    super(config);
+    this.swaggerConfig = normalizeSwaggerConfig(
+      (config as ExpressStorageKitConfig).swagger
+    );
+  }
+
+  /**
+   * Get the Express-specific configuration.
+   */
+  get expressConfig(): ExpressStorageKitConfig {
+    return this._config as ExpressStorageKitConfig;
+  }
+
+  /**
+   * Create an Express Router with Storage Kit endpoints.
+   *
+   * The router implements all endpoints defined in the OpenAPI specification:
+   * - GET /reference - Swagger UI (API documentation)
+   * - POST /:bucket/files - Upload file
+   * - DELETE /:bucket/files/:filePath - Delete single file
+   * - DELETE /:bucket/files - Bulk delete files
+   * - GET /:bucket/signed-url - Generate signed URL
+   * - GET /health - Health check
+   *
+   * @returns Express Router instance
+   *
+   * @example
+   * ```typescript
+   * app.use("/api/storage", storeKit.routeHandler());
+   * ```
+   */
+  routeHandler(): Router {
+    // Return cached router if already created
+    if (this.cachedRouter) {
+      return this.cachedRouter;
+    }
+
+    const router = Router();
+    const config = this.expressConfig;
+
+    // Create handler instance using the shared storage
+    const handler = new StorageHandler(this._storage, config);
+
+    // Configure multer for file uploads
+    const upload = multer({
+      storage: multer.memoryStorage(),
+      limits: {
+        fileSize: config.maxFileSize ?? DEFAULT_MAX_FILE_SIZE,
+      },
+    });
+
+    // ========================================
+    // Swagger UI (API Reference)
+    // ========================================
+    if (this.swaggerConfig.enabled) {
+      let swaggerMiddleware: ReturnType<typeof swaggerUi.setup> | null = null;
+      let swaggerSpec: object | null = null;
+
+      router.use(
+        this.swaggerConfig.path,
+        swaggerUi.serve,
+        (req: Request, res: Response, next: NextFunction) => {
+          if (!swaggerMiddleware) {
+            // req.baseUrl includes the swagger path, so we need to strip it
+            // e.g., "/api/storage/reference" -> "/api/storage"
+            const fullPath = req.baseUrl || "";
+            // Escape regex special characters in swagger path
+            const escapedPath = this.swaggerConfig.path.replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&"
+            );
+            const basePath = fullPath.replace(
+              new RegExp(`${escapedPath}$`),
+              ""
+            );
+            swaggerSpec = loadOpenApiSpec(basePath);
+            swaggerMiddleware = swaggerUi.setup(swaggerSpec, {
+              customSiteTitle:
+                this.swaggerConfig.title || "Storage Kit API Reference",
+              customCss: `
+                .swagger-ui .topbar { display: none }
+                .swagger-ui .info .title { font-size: 2rem }
+              `,
+              swaggerOptions: {
+                persistAuthorization: true,
+                displayRequestDuration: true,
+              },
+            });
+          }
+          swaggerMiddleware(req, res, next);
+        }
+      );
+    }
+
+    // ========================================
+    // Health Check
+    // ========================================
+    router.get(
+      "/health",
+      async (_req: Request, res: Response, next: NextFunction) => {
+        try {
+          const result = await handler.handleHealthCheck();
+          const status = result.status === "healthy" ? 200 : 503;
+          res.status(status).json(result);
+        } catch (error) {
+          next(error);
+        }
+      }
+    );
+
+    // ========================================
+    // Upload File
+    // ========================================
+    router.post(
+      "/:bucket/files",
+      upload.single("file"),
+      async (req: Request, res: Response, next: NextFunction) => {
+        try {
+          const { bucket } = req.params;
+          const { path, contentType } = req.body;
+
+          const file = req.file ? multerToUploadedFile(req.file) : undefined;
+
+          const result = await handler.handleUpload(
+            bucket,
+            file,
+            path,
+            contentType
+          );
+          res.status(201).json(result);
+        } catch (error) {
+          next(error);
+        }
+      }
+    );
+
+    // ========================================
+    // Delete Single File
+    // ========================================
+    router.delete(
+      "/:bucket/files/:filePath(*)",
+      async (req: Request, res: Response, next: NextFunction) => {
+        try {
+          const { bucket, filePath } = req.params;
+          const decodedPath = decodeURIComponent(filePath);
+          await handler.handleDelete(bucket, decodedPath);
+          res.status(204).send();
+        } catch (error) {
+          next(error);
+        }
+      }
+    );
+
+    // ========================================
+    // Bulk Delete Files
+    // ========================================
+    router.delete(
+      "/:bucket/files",
+      async (req: Request, res: Response, next: NextFunction) => {
+        try {
+          const { bucket } = req.params;
+          const { keys } = req.body;
+          const result = await handler.handleBulkDelete(bucket, keys);
+          res.status(200).json(result);
+        } catch (error) {
+          next(error);
+        }
+      }
+    );
+
+    // ========================================
+    // Signed URL Generation
+    // ========================================
+    router.get(
+      "/:bucket/signed-url",
+      async (req: Request, res: Response, next: NextFunction) => {
+        try {
+          const { bucket } = req.params;
+          const { key, type, expiresIn, contentType } = req.query;
+
+          const result = await handler.handleSignedUrl(
+            bucket,
+            key as string | undefined,
+            type as string | undefined,
+            {
+              expiresIn: expiresIn
+                ? parseInt(expiresIn as string, 10)
+                : undefined,
+              contentType: contentType as string | undefined,
+            }
+          );
+
+          res.status(200).json({
+            ...result,
+            expiresAt: result.expiresAt.toISOString(),
+          });
+        } catch (error) {
+          next(error);
+        }
+      }
+    );
+
+    // ========================================
+    // Error Handling Middleware
+    // ========================================
+    router.use(
+      (error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+        if (config.onError && error instanceof Error) {
+          config.onError(error);
+        }
+
+        const { status, body } = mapAnyErrorToResponse(error);
+        res.status(status).json(body);
+      }
+    );
+
+    this.cachedRouter = router;
+    return router;
+  }
+}
+
+/**
+ * Create a Storage Kit instance for Express.
+ *
+ * This is the recommended way to initialize Storage Kit for Express applications.
+ * The returned instance can be used both as a route handler and as a service.
+ *
+ * @param config - Storage Kit configuration
+ * @returns ExpressStorageKit instance
+ *
+ * @example
+ * ```typescript
+ * // store-kit.ts - Centralized initialization
+ * import { createStorageKit } from "@storage-kit/express";
+ *
+ * export const storeKit = createStorageKit({
+ *   provider: "minio",
+ *   endpoint: "http://localhost:9000",
+ *   accessKeyId: "minioadmin",
+ *   secretAccessKey: "minioadmin",
+ *   defaultBucket: "my-bucket",
+ * });
+ *
+ * // index.ts - Use as route handler
+ * import express from "express";
+ * import { storeKit } from "./store-kit";
+ *
+ * const app = express();
+ * app.use("/api/storage", storeKit.routeHandler());
+ *
+ * // service.ts - Use as service (no HTTP involved)
+ * import { storeKit } from "./store-kit";
+ *
+ * const result = await storeKit.getPresignedUploadUrl("_", "files/image.png", {
+ *   contentType: "image/png",
+ *   expiresIn: 3600,
+ * });
+ * ```
+ */
+export function createStorageKit(
+  config: ExpressStorageKitConfig
+): ExpressStorageKit {
+  return new ExpressStorageKit(config);
+}
+
+/**
  * Create an Express Router with Storage Kit endpoints.
  *
- * The router implements all endpoints defined in the OpenAPI specification:
- * - GET /reference - Swagger UI (API documentation)
- * - POST /:bucket/files - Upload file
- * - DELETE /:bucket/files/:filePath - Delete single file
- * - DELETE /:bucket/files - Bulk delete files
- * - GET /:bucket/signed-url - Generate signed URL
- * - GET /health - Health check
+ * @deprecated Use `createStorageKit(config).routeHandler()` instead for unified API.
+ * This function is kept for backward compatibility.
  *
  * @param config - Storage Kit configuration
  * @returns Express Router instance
@@ -132,200 +462,7 @@ function loadOpenApiSpec(basePath: string): object {
  * ```
  */
 export function storageKit(config: ExpressStorageKitConfig): Router {
-  const router = Router();
-
-  // Create storage service from config or use provided instance
-  const storage =
-    config.storage ??
-    createStorageService(config.provider, {
-      endpoint: config.endpoint,
-      accessKeyId: config.accessKeyId,
-      secretAccessKey: config.secretAccessKey,
-      region: config.region,
-      publicUrlBase: config.publicUrlBase,
-    });
-
-  // Create handler instance
-  const handler = new StorageHandler(storage, config);
-
-  // Configure multer for file uploads
-  const upload = multer({
-    storage: multer.memoryStorage(),
-    limits: {
-      fileSize: config.maxFileSize ?? DEFAULT_MAX_FILE_SIZE,
-    },
-  });
-
-  // ========================================
-  // Swagger UI (API Reference)
-  // ========================================
-  const swaggerConfig = normalizeSwaggerConfig(config.swagger);
-  
-  if (swaggerConfig.enabled) {
-    // We need to defer spec loading to capture the mount path
-    // Use a middleware that serves swagger on first request
-    let swaggerMiddleware: ReturnType<typeof swaggerUi.setup> | null = null;
-    let swaggerSpec: object | null = null;
-
-    router.use(
-      swaggerConfig.path,
-      swaggerUi.serve,
-      (req: Request, res: Response, next: NextFunction) => {
-        if (!swaggerMiddleware) {
-          // Determine the base path from the request
-          const basePath = req.baseUrl || "";
-          swaggerSpec = loadOpenApiSpec(basePath);
-          swaggerMiddleware = swaggerUi.setup(swaggerSpec, {
-            customSiteTitle: swaggerConfig.title || "Storage Kit API Reference",
-            customCss: `
-              .swagger-ui .topbar { display: none }
-              .swagger-ui .info .title { font-size: 2rem }
-            `,
-            swaggerOptions: {
-              persistAuthorization: true,
-              displayRequestDuration: true,
-            },
-          });
-        }
-        swaggerMiddleware(req, res, next);
-      }
-    );
-  }
-
-  // ========================================
-  // Health Check
-  // ========================================
-  router.get("/health", async (_req: Request, res: Response, next: NextFunction) => {
-    try {
-      const result = await handler.handleHealthCheck();
-      const status = result.status === "healthy" ? 200 : 503;
-      res.status(status).json(result);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // ========================================
-  // Upload File
-  // ========================================
-  router.post(
-    "/:bucket/files",
-    upload.single("file"),
-    async (req: Request, res: Response, next: NextFunction) => {
-      try {
-        const { bucket } = req.params;
-        const { path, contentType } = req.body;
-
-        const file = req.file ? multerToUploadedFile(req.file) : undefined;
-
-        const result = await handler.handleUpload(bucket, file, path, contentType);
-        res.status(201).json(result);
-      } catch (error) {
-        next(error);
-      }
-    }
-  );
-
-  // ========================================
-  // Delete Single File
-  // ========================================
-  router.delete(
-    "/:bucket/files/:filePath(*)",
-    async (req: Request, res: Response, next: NextFunction) => {
-      try {
-        const { bucket, filePath } = req.params;
-
-        // URL decode the file path
-        const decodedPath = decodeURIComponent(filePath);
-
-        await handler.handleDelete(bucket, decodedPath);
-        res.status(204).send();
-      } catch (error) {
-        next(error);
-      }
-    }
-  );
-
-  // ========================================
-  // Bulk Delete Files
-  // ========================================
-  router.delete(
-    "/:bucket/files",
-    async (req: Request, res: Response, next: NextFunction) => {
-      try {
-        const { bucket } = req.params;
-        const { keys } = req.body;
-
-        const result = await handler.handleBulkDelete(bucket, keys);
-        res.status(200).json(result);
-      } catch (error) {
-        next(error);
-      }
-    }
-  );
-
-  // ========================================
-  // Signed URL Generation
-  // ========================================
-  router.get(
-    "/:bucket/signed-url",
-    async (req: Request, res: Response, next: NextFunction) => {
-      try {
-        const { bucket } = req.params;
-        const { key, type, expiresIn, contentType } = req.query;
-
-        const result = await handler.handleSignedUrl(
-          bucket,
-          key as string | undefined,
-          type as string | undefined,
-          {
-            expiresIn: expiresIn ? parseInt(expiresIn as string, 10) : undefined,
-            contentType: contentType as string | undefined,
-          }
-        );
-
-        // Convert Date to ISO string for JSON response
-        res.status(200).json({
-          ...result,
-          expiresAt: result.expiresAt.toISOString(),
-        });
-      } catch (error) {
-        next(error);
-      }
-    }
-  );
-
-  // ========================================
-  // Error Handling Middleware
-  // ========================================
-  router.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
-    // Call error hook if configured
-    if (config.onError && error instanceof Error) {
-      config.onError(error);
-    }
-
-    const { status, body } = mapAnyErrorToResponse(error);
-    res.status(status).json(body);
-  });
-
-  return router;
-}
-
-/**
- * Normalize swagger configuration to SwaggerOptions.
- */
-function normalizeSwaggerConfig(swagger?: boolean | SwaggerOptions): Required<SwaggerOptions> {
-  if (swagger === false) {
-    return { enabled: false, path: "/reference", title: "Storage Kit API Reference" };
-  }
-  if (swagger === true || swagger === undefined) {
-    return { enabled: true, path: "/reference", title: "Storage Kit API Reference" };
-  }
-  return {
-    enabled: swagger.enabled !== false,
-    path: swagger.path || "/reference",
-    title: swagger.title || "Storage Kit API Reference",
-  };
+  return new ExpressStorageKit(config).routeHandler();
 }
 
 /**

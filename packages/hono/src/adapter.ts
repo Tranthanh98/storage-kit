@@ -5,17 +5,23 @@
  * Edge-runtime compatible (Cloudflare Workers, Deno, Bun).
  */
 
-import { Hono, type Context } from "hono";
 import { swaggerUI } from "@hono/swagger-ui";
 import {
   createStorageService,
-  StorageHandler,
   mapAnyErrorToResponse,
+  StorageError,
+  StorageHandler,
+  type BulkDeleteResponse,
+  type FileUploadResponse,
+  type HealthCheckResponse,
+  type IStorageService,
+  type SignedUrlOptions,
+  type SignedUrlResponse,
   type StorageKitConfig,
   type UploadedFile,
-  type IStorageService,
-  StorageError,
+  type UploadOptions,
 } from "@storage-kit/core";
+import { Hono, type Context } from "hono";
 
 /**
  * Swagger UI customization options.
@@ -55,12 +61,22 @@ async function honoFileToUploadedFile(file: File): Promise<UploadedFile> {
 /**
  * Normalize swagger configuration to SwaggerOptions.
  */
-function normalizeSwaggerConfig(swagger?: boolean | SwaggerOptions): Required<SwaggerOptions> {
+function normalizeSwaggerConfig(
+  swagger?: boolean | SwaggerOptions
+): Required<SwaggerOptions> {
   if (swagger === false) {
-    return { enabled: false, path: "/reference", title: "Storage Kit API Reference" };
+    return {
+      enabled: false,
+      path: "/reference",
+      title: "Storage Kit API Reference",
+    };
   }
   if (swagger === true || swagger === undefined) {
-    return { enabled: true, path: "/reference", title: "Storage Kit API Reference" };
+    return {
+      enabled: true,
+      path: "/reference",
+      title: "Storage Kit API Reference",
+    };
   }
   return {
     enabled: swagger.enabled !== false,
@@ -94,7 +110,10 @@ function getEmbeddedOpenApiSpec(): object {
                   schema: {
                     type: "object",
                     properties: {
-                      status: { type: "string", enum: ["healthy", "unhealthy"] },
+                      status: {
+                        type: "string",
+                        enum: ["healthy", "unhealthy"],
+                      },
                       provider: { type: "string" },
                     },
                   },
@@ -109,7 +128,12 @@ function getEmbeddedOpenApiSpec(): object {
           summary: "Upload File",
           operationId: "uploadFile",
           parameters: [
-            { name: "bucket", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "bucket",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           requestBody: {
             content: {
@@ -134,7 +158,12 @@ function getEmbeddedOpenApiSpec(): object {
           summary: "Bulk Delete Files",
           operationId: "bulkDeleteFiles",
           parameters: [
-            { name: "bucket", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "bucket",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           requestBody: {
             content: {
@@ -159,8 +188,18 @@ function getEmbeddedOpenApiSpec(): object {
           summary: "Delete File",
           operationId: "deleteFile",
           parameters: [
-            { name: "bucket", in: "path", required: true, schema: { type: "string" } },
-            { name: "filePath", in: "path", required: true, schema: { type: "string" } },
+            {
+              name: "bucket",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+            {
+              name: "filePath",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
           ],
           responses: {
             "204": { description: "File deleted successfully" },
@@ -172,9 +211,24 @@ function getEmbeddedOpenApiSpec(): object {
           summary: "Generate Signed URL",
           operationId: "getSignedUrl",
           parameters: [
-            { name: "bucket", in: "path", required: true, schema: { type: "string" } },
-            { name: "key", in: "query", required: true, schema: { type: "string" } },
-            { name: "type", in: "query", required: true, schema: { type: "string", enum: ["upload", "download"] } },
+            {
+              name: "bucket",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+            {
+              name: "key",
+              in: "query",
+              required: true,
+              schema: { type: "string" },
+            },
+            {
+              name: "type",
+              in: "query",
+              required: true,
+              schema: { type: "string", enum: ["upload", "download"] },
+            },
             { name: "expiresIn", in: "query", schema: { type: "integer" } },
             { name: "contentType", in: "query", schema: { type: "string" } },
           ],
@@ -188,184 +242,338 @@ function getEmbeddedOpenApiSpec(): object {
 }
 
 /**
- * Create a Hono app with Storage Kit endpoints.
- *
- * The app implements all endpoints defined in the OpenAPI specification:
- * - GET /reference - Swagger UI (API documentation)
- * - POST /:bucket/files - Upload file
- * - DELETE /:bucket/files/:filePath - Delete single file
- * - DELETE /:bucket/files - Bulk delete files
- * - GET /:bucket/signed-url - Generate signed URL
- * - GET /health - Health check
- *
- * Edge-runtime compatible - works with Cloudflare Workers, Deno, Bun, and Node.js.
- *
- * @param config - Storage Kit configuration
- * @returns Hono app instance
+ * Service interface for Hono Storage Kit.
+ */
+export interface IHonoStorageKitService {
+  /** Get the underlying storage service */
+  readonly storage: IStorageService;
+  /** Upload a file */
+  uploadFile(
+    bucket: string,
+    file: Buffer | Uint8Array,
+    fileName: string,
+    pathFolder?: string,
+    options?: UploadOptions
+  ): Promise<FileUploadResponse>;
+  /** Delete a single file */
+  deleteFile(bucket: string, key: string): Promise<void>;
+  /** Delete multiple files */
+  deleteFiles(bucket: string, keys: string[]): Promise<BulkDeleteResponse>;
+  /** Generate a presigned URL for upload */
+  getPresignedUploadUrl(
+    bucket: string,
+    key: string,
+    options?: SignedUrlOptions
+  ): Promise<SignedUrlResponse>;
+  /** Generate a presigned URL for download */
+  getPresignedDownloadUrl(
+    bucket: string,
+    key: string,
+    options?: Pick<SignedUrlOptions, "expiresIn">
+  ): Promise<SignedUrlResponse>;
+  /** Health check */
+  healthCheck(): Promise<HealthCheckResponse>;
+  /** Get a bucket-scoped service */
+  bucket(bucketName: string): IStorageService;
+  /** Get route handler */
+  routeHandler(): Hono;
+}
+
+/**
+ * Hono Storage Kit - Unified storage instance with route handler and service methods.
  *
  * @example
  * ```typescript
- * import { Hono } from "hono";
- * import { storageKit } from "@storage-kit/hono";
+ * // store-kit.ts - Centralized initialization
+ * import { createStorageKit } from "@storage-kit/hono";
  *
- * const app = new Hono();
- *
- * app.route("/api/storage", storageKit({
+ * export const storeKit = createStorageKit({
  *   provider: "cloudflare-r2",
  *   endpoint: "https://account.r2.cloudflarestorage.com",
  *   accessKeyId: "key",
  *   secretAccessKey: "secret",
- * }));
+ *   defaultBucket: "my-bucket",
+ * });
  *
- * // Swagger UI available at: /api/storage/reference
- * export default app;
+ * // index.ts - Use as route handler
+ * import { storeKit } from "./store-kit";
+ * app.route("/api/storage", storeKit.routeHandler());
+ *
+ * // Use as service
+ * const result = await storeKit.getPresignedUploadUrl("_", "files/image.png");
  * ```
  */
-export function storageKit(config: HonoStorageKitConfig): Hono {
-  const app = new Hono();
+export class HonoStorageKit implements IHonoStorageKitService {
+  private readonly _storage: IStorageService;
+  private readonly _config: HonoStorageKitConfig;
+  private readonly swaggerConfig: Required<SwaggerOptions>;
+  private cachedApp: Hono | null = null;
 
-  // Create storage service from config or use provided instance
-  const storage =
-    config.storage ??
-    createStorageService(config.provider, {
-      endpoint: config.endpoint,
-      accessKeyId: config.accessKeyId,
-      secretAccessKey: config.secretAccessKey,
-      region: config.region,
-      publicUrlBase: config.publicUrlBase,
-    });
+  constructor(config: HonoStorageKitConfig) {
+    this._config = config;
+    this.swaggerConfig = normalizeSwaggerConfig(config.swagger);
 
-  // Create handler instance
-  const handler = new StorageHandler(storage, config);
-
-  // ========================================
-  // Error Handling Middleware
-  // ========================================
-  app.onError((error: Error, c: Context) => {
-    // Call error hook if configured
-    if (config.onError) {
-      config.onError(error);
-    }
-
-    const { status, body } = mapAnyErrorToResponse(error);
-    return c.json(body, status as 400 | 404 | 500 | 503);
-  });
-
-  // ========================================
-  // Swagger UI Setup
-  // ========================================
-  const swaggerConfig = normalizeSwaggerConfig(config.swagger);
-
-  if (swaggerConfig.enabled) {
-    const openApiSpec = getEmbeddedOpenApiSpec();
-
-    // Serve OpenAPI spec as JSON
-    app.get("/openapi.json", (c: Context) => {
-      return c.json(openApiSpec);
-    });
-
-    // Serve Swagger UI
-    app.get(swaggerConfig.path, swaggerUI({ url: "./openapi.json" }));
+    // Create storage service from config or use provided instance
+    this._storage =
+      config.storage ??
+      createStorageService(config.provider, {
+        endpoint: config.endpoint,
+        accessKeyId: config.accessKeyId,
+        secretAccessKey: config.secretAccessKey,
+        region: config.region,
+        publicUrlBase: config.publicUrlBase,
+      });
   }
 
-  // ========================================
-  // Health Check
-  // ========================================
-  app.get("/health", async (c: Context) => {
-    const result = await handler.handleHealthCheck();
-    const status = result.status === "healthy" ? 200 : 503;
-    return c.json(result, status as 200 | 503);
-  });
+  get storage(): IStorageService {
+    return this._storage;
+  }
 
-  // ========================================
-  // Upload File
-  // ========================================
-  app.post("/:bucket/files", async (c: Context) => {
-    const bucket = c.req.param("bucket");
+  get config(): HonoStorageKitConfig {
+    return this._config;
+  }
 
-    // Parse multipart form data using Hono's built-in parser
-    const formData = await c.req.parseBody();
+  /**
+   * Resolve bucket name ("_" means use defaultBucket).
+   */
+  private resolveBucket(bucket: string): string {
+    if (bucket === "_" && this._config.defaultBucket) {
+      return this._config.defaultBucket;
+    }
+    if (bucket === "_" && !this._config.defaultBucket) {
+      throw new StorageError(
+        "MISSING_REQUIRED_PARAM",
+        "Bucket parameter is '_' but no defaultBucket is configured",
+        { parameter: "bucket" }
+      );
+    }
+    return bucket;
+  }
 
-    const fileData = formData["file"];
-    let file: UploadedFile | undefined;
+  async uploadFile(
+    bucket: string,
+    file: Buffer | Uint8Array,
+    fileName: string,
+    pathFolder?: string,
+    options?: UploadOptions
+  ): Promise<FileUploadResponse> {
+    const resolvedBucket = this.resolveBucket(bucket);
+    const result = await this._storage
+      .getBucket(resolvedBucket)
+      .uploadFile(file, fileName, pathFolder, options);
 
-    if (fileData && fileData instanceof File) {
-      file = await honoFileToUploadedFile(fileData);
+    if (this._config.onUploadComplete) {
+      this._config.onUploadComplete({
+        url: result.url,
+        key: result.key,
+        bucket: resolvedBucket,
+      });
     }
 
-    const path = typeof formData["path"] === "string" ? formData["path"] : undefined;
-    const contentType = typeof formData["contentType"] === "string" ? formData["contentType"] : undefined;
+    return result;
+  }
 
-    const result = await handler.handleUpload(bucket, file, path, contentType);
-    return c.json(result, 201);
-  });
+  async deleteFile(bucket: string, key: string): Promise<void> {
+    const resolvedBucket = this.resolveBucket(bucket);
+    await this._storage.getBucket(resolvedBucket).deleteFile(key);
+  }
 
-  // ========================================
-  // Delete Single File
-  // ========================================
-  app.delete("/:bucket/files/:filePath{.+}", async (c: Context) => {
-    const bucket = c.req.param("bucket");
-    const filePath = c.req.param("filePath");
+  async deleteFiles(
+    bucket: string,
+    keys: string[]
+  ): Promise<BulkDeleteResponse> {
+    const resolvedBucket = this.resolveBucket(bucket);
+    return await this._storage.getBucket(resolvedBucket).deleteFiles(keys);
+  }
 
-    // URL decode the file path
-    const decodedPath = decodeURIComponent(filePath);
+  async getPresignedUploadUrl(
+    bucket: string,
+    key: string,
+    options?: SignedUrlOptions
+  ): Promise<SignedUrlResponse> {
+    const resolvedBucket = this.resolveBucket(bucket);
+    return await this._storage
+      .getBucket(resolvedBucket)
+      .getPresignedUploadUrl(key, options);
+  }
 
-    await handler.handleDelete(bucket, decodedPath);
-    return c.body(null, 204);
-  });
+  async getPresignedDownloadUrl(
+    bucket: string,
+    key: string,
+    options?: Pick<SignedUrlOptions, "expiresIn">
+  ): Promise<SignedUrlResponse> {
+    const resolvedBucket = this.resolveBucket(bucket);
+    return await this._storage
+      .getBucket(resolvedBucket)
+      .getPresignedDownloadUrl(key, options);
+  }
 
-  // ========================================
-  // Bulk Delete Files
-  // ========================================
-  app.delete("/:bucket/files", async (c: Context) => {
-    const bucket = c.req.param("bucket");
-    const body = await c.req.json<{ keys?: string[] }>();
+  async healthCheck(): Promise<HealthCheckResponse> {
+    return await this._storage.healthCheck();
+  }
 
-    const result = await handler.handleBulkDelete(bucket, body?.keys);
-    return c.json(result, 200);
-  });
+  bucket(bucketName: string): IStorageService {
+    const resolvedBucket = this.resolveBucket(bucketName);
+    return this._storage.getBucket(resolvedBucket);
+  }
 
-  // ========================================
-  // Signed URL Generation
-  // ========================================
-  app.get("/:bucket/signed-url", async (c: Context) => {
-    const bucket = c.req.param("bucket");
-    const key = c.req.query("key");
-    const type = c.req.query("type");
-    const expiresIn = c.req.query("expiresIn");
-    const contentType = c.req.query("contentType");
+  /**
+   * Create a Hono app with Storage Kit endpoints.
+   */
+  routeHandler(): Hono {
+    if (this.cachedApp) {
+      return this.cachedApp;
+    }
 
-    const result = await handler.handleSignedUrl(bucket, key, type, {
-      expiresIn: expiresIn ? parseInt(expiresIn, 10) : undefined,
-      contentType,
+    const app = new Hono();
+    const config = this._config;
+    const handler = new StorageHandler(this._storage, config);
+
+    // Error Handling
+    app.onError((error: Error, c: Context) => {
+      if (config.onError) {
+        config.onError(error);
+      }
+      const { status, body } = mapAnyErrorToResponse(error);
+      return c.json(body, status as 400 | 404 | 500 | 503);
     });
 
-    // Convert Date to ISO string for JSON response
-    return c.json(
-      {
-        ...result,
-        expiresAt: result.expiresAt.toISOString(),
-      },
-      200
-    );
-  });
+    // Swagger UI
+    if (this.swaggerConfig.enabled) {
+      const openApiSpec = getEmbeddedOpenApiSpec();
+      app.get("/openapi.json", (c: Context) => c.json(openApiSpec));
+      app.get(this.swaggerConfig.path, swaggerUI({ url: "./openapi.json" }));
+    }
 
-  return app;
+    // Health Check
+    app.get("/health", async (c: Context) => {
+      const result = await handler.handleHealthCheck();
+      const status = result.status === "healthy" ? 200 : 503;
+      return c.json(result, status as 200 | 503);
+    });
+
+    // Upload File
+    app.post("/:bucket/files", async (c: Context) => {
+      const bucket = c.req.param("bucket");
+      const formData = await c.req.parseBody();
+      const fileData = formData["file"];
+      let file: UploadedFile | undefined;
+
+      if (fileData && fileData instanceof File) {
+        file = await honoFileToUploadedFile(fileData);
+      }
+
+      const path =
+        typeof formData["path"] === "string" ? formData["path"] : undefined;
+      const contentType =
+        typeof formData["contentType"] === "string"
+          ? formData["contentType"]
+          : undefined;
+
+      const result = await handler.handleUpload(
+        bucket,
+        file,
+        path,
+        contentType
+      );
+      return c.json(result, 201);
+    });
+
+    // Delete Single File
+    app.delete("/:bucket/files/:filePath{.+}", async (c: Context) => {
+      const bucket = c.req.param("bucket");
+      const filePath = c.req.param("filePath");
+      const decodedPath = decodeURIComponent(filePath);
+      await handler.handleDelete(bucket, decodedPath);
+      return c.body(null, 204);
+    });
+
+    // Bulk Delete Files
+    app.delete("/:bucket/files", async (c: Context) => {
+      const bucket = c.req.param("bucket");
+      const body = await c.req.json<{ keys?: string[] }>();
+      const result = await handler.handleBulkDelete(bucket, body?.keys);
+      return c.json(result, 200);
+    });
+
+    // Signed URL Generation
+    app.get("/:bucket/signed-url", async (c: Context) => {
+      const bucket = c.req.param("bucket");
+      const key = c.req.query("key");
+      const type = c.req.query("type");
+      const expiresIn = c.req.query("expiresIn");
+      const contentType = c.req.query("contentType");
+
+      const result = await handler.handleSignedUrl(bucket, key, type, {
+        expiresIn: expiresIn ? parseInt(expiresIn, 10) : undefined,
+        contentType,
+      });
+
+      return c.json(
+        { ...result, expiresAt: result.expiresAt.toISOString() },
+        200
+      );
+    });
+
+    this.cachedApp = app;
+    return app;
+  }
+}
+
+/**
+ * Create a Storage Kit instance for Hono.
+ *
+ * @param config - Storage Kit configuration
+ * @returns HonoStorageKit instance
+ *
+ * @example
+ * ```typescript
+ * // store-kit.ts
+ * import { createStorageKit } from "@storage-kit/hono";
+ *
+ * export const storeKit = createStorageKit({
+ *   provider: "cloudflare-r2",
+ *   endpoint: "https://account.r2.cloudflarestorage.com",
+ *   accessKeyId: "key",
+ *   secretAccessKey: "secret",
+ *   defaultBucket: "my-bucket",
+ * });
+ *
+ * // index.ts
+ * import { Hono } from "hono";
+ * import { storeKit } from "./store-kit";
+ *
+ * const app = new Hono();
+ * app.route("/api/storage", storeKit.routeHandler());
+ *
+ * // Use as service
+ * const url = await storeKit.getPresignedUploadUrl("_", "file.png");
+ * ```
+ */
+export function createStorageKit(config: HonoStorageKitConfig): HonoStorageKit {
+  return new HonoStorageKit(config);
+}
+
+/**
+ * Create a Hono app with Storage Kit endpoints.
+ *
+ * @deprecated Use `createStorageKit(config).routeHandler()` instead for unified API.
+ *
+ * @param config - Storage Kit configuration
+ * @returns Hono app instance
+ */
+export function storageKit(config: HonoStorageKitConfig): Hono {
+  return new HonoStorageKit(config).routeHandler();
 }
 
 /**
  * Middleware for handling StorageError in Hono apps.
- * Use this if you need to handle storage errors at app level.
- *
- * @example
- * ```typescript
- * import { storageErrorMiddleware } from "@storage-kit/hono";
- *
- * app.use("*", storageErrorMiddleware());
- * ```
  */
 export function storageErrorMiddleware() {
-  return async (c: Context, next: () => Promise<void>): Promise<void | Response> => {
+  return async (
+    c: Context,
+    next: () => Promise<void>
+  ): Promise<void | Response> => {
     try {
       await next();
     } catch (error) {

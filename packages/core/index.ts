@@ -6,6 +6,7 @@
 
 // Core types and interface
 export {
+  StorageError,
   type BulkDeleteFailure,
   type BulkDeleteResponse,
   type FileUploadResponse,
@@ -14,30 +15,34 @@ export {
   type SignedUrlOptions,
   type SignedUrlResponse,
   type StorageConfig,
-  StorageError,
   type StorageErrorCode,
   type UploadOptions,
 } from "./providers/storageService";
 
 // Provider implementations
-export { MinioStorageService } from "./providers/minioStorageService";
 export { BackBlazeStorageService } from "./providers/backblazeStorageService";
 export { CloudflareR2StorageService } from "./providers/cloudflareR2StorageService";
+export { MinioStorageService } from "./providers/minioStorageService";
 
 // Handler abstraction for framework adapters
 export {
-  StorageHandler,
-  type SignedUrlType,
-  mapErrorToResponse,
-  mapAnyErrorToResponse,
-  isStorageError,
-  type StorageProvider,
-  type UploadedFile,
-  type StorageKitConfig,
-  type HttpErrorResponse,
+  // Unified Storage Kit Instance
+  BaseStorageKit,
   DEFAULT_MAX_FILE_SIZE,
   DEFAULT_SIGNED_URL_EXPIRATION,
   MAX_BULK_DELETE_KEYS,
+  StorageHandler,
+  isStorageError,
+  mapAnyErrorToResponse,
+  mapErrorToResponse,
+  type BaseStorageKitConfig,
+  type HttpErrorResponse,
+  type IStorageKitService,
+  type SignedUrlType,
+  type StorageKitConfig,
+  type StorageKitInstanceConfig,
+  type StorageProvider,
+  type UploadedFile,
 } from "./handler";
 
 /**
@@ -68,11 +73,17 @@ export function createStorageService(
 ): import("./providers/storageService").IStorageService {
   switch (provider) {
     case "minio":
-      return new (require("./providers/minioStorageService").MinioStorageService)(config);
+      return new (require("./providers/minioStorageService").MinioStorageService)(
+        config
+      );
     case "backblaze":
-      return new (require("./providers/backblazeStorageService").BackBlazeStorageService)(config);
+      return new (require("./providers/backblazeStorageService").BackBlazeStorageService)(
+        config
+      );
     case "cloudflare-r2":
-      return new (require("./providers/cloudflareR2StorageService").CloudflareR2StorageService)(config);
+      return new (require("./providers/cloudflareR2StorageService").CloudflareR2StorageService)(
+        config
+      );
     default:
       throw new Error(`Unknown storage provider: ${provider}`);
   }

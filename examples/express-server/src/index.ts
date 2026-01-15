@@ -5,10 +5,10 @@
  * Access the API documentation at: http://localhost:3000/api/storage/reference
  */
 
-import express from "express";
+import { createStorageKit } from "@storage-kit/express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { storageKit } from "@storage-kit/express";
+import express from "express";
 
 // Load environment variables
 dotenv.config();
@@ -21,21 +21,66 @@ app.use(cors());
 app.use(express.json());
 
 // ============================================
+// Create Storage Kit Instance (centralized initialization)
+// This instance can be used both as route handler and as service
+// ============================================
+export const storeKit = createStorageKit({
+  provider: "minio",
+  endpoint: process.env.MINIO_ENDPOINT || "http://localhost:9000",
+  accessKeyId: process.env.MINIO_ACCESS_KEY || "minioadmin",
+  secretAccessKey: process.env.MINIO_SECRET_KEY || "minioadmin",
+  defaultBucket: "test-bucket",
+  // Swagger UI is enabled by default at /reference
+  // To customize: swagger: { path: "/docs", title: "My API" }
+  // To disable: swagger: false
+});
+
+// ============================================
 // Storage Kit API at /api/storage
 // Swagger UI is automatically available at /api/storage/reference
 // ============================================
-app.use(
-  "/api/storage",
-  storageKit({
-    provider: "minio",
-    endpoint: process.env.MINIO_ENDPOINT || "http://localhost:9000",
-    accessKeyId: process.env.MINIO_ACCESS_KEY || "minioadmin",
-    secretAccessKey: process.env.MINIO_SECRET_KEY || "minioadmin",
-    // Swagger UI is enabled by default at /reference
-    // To customize: swagger: { path: "/docs", title: "My API" }
-    // To disable: swagger: false
-  })
-);
+app.use("/api/storage", storeKit.routeHandler());
+
+// ============================================
+// Example: Using Storage Kit as a service
+// ============================================
+app.get("/example/presigned-url", async (req, res) => {
+  try {
+    // Using storeKit as a service - no HTTP involved
+    // "_" means use the defaultBucket configured above
+    const result = await storeKit.getPresignedUploadUrl(
+      "_",
+      "uploads/example.png",
+      {
+        contentType: "image/png",
+        expiresIn: 3600, // 1 hour
+      }
+    );
+    res.json({
+      message: "Presigned URL generated using storeKit service",
+      result: {
+        signedUrl: result.signedUrl,
+        publicUrl: result.publicUrl,
+        expiresAt: result.expiresAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// Example: Direct service usage for health check
+app.get("/example/health", async (_req, res) => {
+  try {
+    const health = await storeKit.healthCheck();
+    res.json({
+      message: "Health check using storeKit service",
+      result: health,
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
 
 // ============================================
 // Root endpoint with links
@@ -52,7 +97,12 @@ app.get("/", (_req, res) => {
       uploadFile: "POST /api/storage/{bucket}/files",
       deleteFile: "DELETE /api/storage/{bucket}/files/{filePath}",
       bulkDelete: "DELETE /api/storage/{bucket}/files",
-      signedUrl: "GET /api/storage/{bucket}/signed-url?key=...&type=upload|download",
+      signedUrl:
+        "GET /api/storage/{bucket}/signed-url?key=...&type=upload|download",
+    },
+    examples: {
+      presignedUrl: "/example/presigned-url",
+      health: "/example/health",
     },
   });
 });
@@ -69,6 +119,10 @@ app.listen(PORT, () => {
 |  Server running at:    http://localhost:${PORT}                      |
 |  API Reference:        http://localhost:${PORT}/api/storage/reference|
 |  Health Check:         http://localhost:${PORT}/api/storage/health   |
+|                                                                   |
+|  Example endpoints (using storeKit as service):                   |
+|    - GET /example/presigned-url                                   |
+|    - GET /example/health                                          |
 |                                                                   |
 |  Make sure MinIO is running:                                      |
 |    docker-compose up -d                                           |

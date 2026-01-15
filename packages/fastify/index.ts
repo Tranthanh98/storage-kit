@@ -7,16 +7,21 @@
  */
 
 export {
-  storageKitPlugin,
+  FastifyStorageKit,
   createStorageErrorHandler,
+  // New unified API (recommended)
+  createStorageKit,
+  // Legacy API (deprecated, kept for backward compatibility)
+  storageKitPlugin,
   type FastifyStorageKitConfig,
+  type IFastifyStorageKitService,
   type SwaggerOptions,
 } from "./src/plugin";
 
 // Re-export core types for convenience
 export type {
-  StorageKitConfig,
-  UploadedFile,
-  StorageProvider,
   HttpErrorResponse,
+  StorageKitConfig,
+  StorageProvider,
+  UploadedFile,
 } from "@storage-kit/core";
