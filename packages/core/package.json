@@ -1,6 +1,6 @@
 {
   "name": "@storage-kit/core",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Core storage service for S3-compatible providers (MinIO, Backblaze B2, Cloudflare R2)",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
