@@ -33,8 +33,17 @@
     "multipart",
     "plugin"
   ],
-  "author": "",
+  "author": "Tranthanh98",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tranthanh98/storage-kit.git",
+    "directory": "packages/fastify"
+  },
+  "bugs": {
+    "url": "https://github.com/Tranthanh98/storage-kit/issues"
+  },
+  "homepage": "https://github.com/Tranthanh98/storage-kit#readme",
   "engines": {
     "node": ">=18.0.0"
   },
