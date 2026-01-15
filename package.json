@@ -22,6 +22,10 @@
     "cloudflare-r2",
     "object-storage"
   ],
+  "bugs": {
+    "url": "https://github.com/Tranthanh98/storage-kit/issues"
+  },
+  "homepage": "https://tranthanh98.github.io/storage-kit/",
   "author": "",
   "license": "MIT",
   "engines": {
