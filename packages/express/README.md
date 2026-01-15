@@ -58,6 +58,49 @@ app.listen(3000, () => {
 
 **Swagger UI** is automatically available at `/api/storage/reference` - no additional setup required!
 
+## Multi-Provider Configuration
+
+Storage Kit supports configuring multiple storage providers and switching between them at runtime using `useProvider()`. This is useful for multi-region deployments, hybrid cloud strategies, and migrations.
+
+```typescript
+// store-kit.ts
+import { createStorageKit } from "@storage-kit/express";
+
+export const storeKit = createStorageKit({
+  provider: "minio", // Default provider
+  providers: {
+    minio: {
+      endpoint: "http://localhost:9000",
+      accessKeyId: "minioadmin",
+      secretAccessKey: "minioadmin",
+    },
+    "cloudflare-r2": {
+      endpoint: "https://account.r2.cloudflarestorage.com",
+      accessKeyId: process.env.R2_ACCESS_KEY!,
+      secretAccessKey: process.env.R2_SECRET_KEY!,
+    },
+    s3: {
+      region: "us-east-1",
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    },
+  },
+  defaultBucket: "uploads",
+});
+
+// Use default provider (minio)
+await storeKit.deleteFile("_", "old-file.png");
+
+// Switch to R2 for specific operation
+await storeKit.useProvider("cloudflare-r2").deleteFile("_", "cdn-file.png");
+
+// Switch to S3 and get bucket-scoped service
+const s3Archives = storeKit.useProvider("s3").bucket("archives");
+await s3Archives.uploadFile(buffer, "backup.zip");
+```
+
+See the [Multi-Provider Guide](https://tranthanh98.github.io/storage-kit/guide/multi-provider.html) for more details.
+
 ## Service Methods
 
 The `createStorageKit` instance provides direct access to storage operations:

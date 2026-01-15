@@ -27,13 +27,32 @@ import {
  * Customize these values based on your environment.
  */
 const config: ExpressStorageKitConfig = {
-  // Required: Storage provider type
+  // Required: Default storage provider
   provider: "minio",
 
-  // Provider credentials
-  endpoint: process.env.MINIO_ENDPOINT || "http://localhost:9000",
-  accessKeyId: process.env.MINIO_ACCESS_KEY || "minioadmin",
-  secretAccessKey: process.env.MINIO_SECRET_KEY || "minioadmin",
+  // Configure multiple providers
+  providers: {
+    // MinIO Provider (Default)
+    minio: {
+      endpoint: process.env.MINIO_ENDPOINT || "http://localhost:9000",
+      accessKeyId: process.env.MINIO_ACCESS_KEY || "minioadmin",
+      secretAccessKey: process.env.MINIO_SECRET_KEY || "minioadmin",
+    },
+
+    // Cloudflare R2 Provider (Optional - config via .env)
+    "cloudflare-r2": {
+      endpoint: process.env.R2_ENDPOINT || "https://account.r2.cloudflarestorage.com",
+      accessKeyId: process.env.R2_ACCESS_KEY || "placeholder_key",
+      secretAccessKey: process.env.R2_SECRET_KEY || "placeholder_secret",
+    },
+
+    // AWS S3 Provider (Optional - config via .env)
+    s3: {
+      region: process.env.AWS_REGION || "us-east-1",
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID || "placeholder_key",
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "placeholder_secret",
+    },
+  },
 
   // Optional: Default bucket for convenience
   // When using "_" as bucket parameter, this bucket will be used

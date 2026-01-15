@@ -30,6 +30,7 @@ export default defineConfig({
             { text: "What is Storage Kit?", link: "/guide/introduction" },
             { text: "Installation", link: "/guide/installation" },
             { text: "Core Concepts", link: "/guide/concepts" },
+            { text: "Multi-Provider", link: "/guide/multi-provider" },
           ],
         },
         {

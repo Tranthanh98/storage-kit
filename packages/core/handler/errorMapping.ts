@@ -19,6 +19,7 @@ const ERROR_STATUS_MAP: Record<StorageErrorCode, number> = {
   INVALID_SIGNED_URL_TYPE: 400,
   EMPTY_KEYS_ARRAY: 400,
   KEYS_LIMIT_EXCEEDED: 400,
+  PROVIDER_NOT_CONFIGURED: 400,
 
   // Server errors (5xx)
   UPLOAD_FAILED: 500,

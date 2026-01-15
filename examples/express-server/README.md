@@ -57,6 +57,12 @@ You'll see an interactive API documentation where you can:
 | `MINIO_ENDPOINT` | `http://localhost:9000` | MinIO/S3 endpoint |
 | `MINIO_ACCESS_KEY` | `minioadmin` | Access key |
 | `MINIO_SECRET_KEY` | `minioadmin` | Secret key |
+| `R2_ENDPOINT` | - | Cloudflare R2 endpoint |
+| `R2_ACCESS_KEY` | - | Cloudflare R2 access key |
+| `R2_SECRET_KEY` | - | Cloudflare R2 secret key |
+| `AWS_REGION` | - | AWS Region |
+| `AWS_ACCESS_KEY_ID` | - | AWS Access Key ID |
+| `AWS_SECRET_ACCESS_KEY` | - | AWS Secret Access Key |
 
 Copy `.env.example` to `.env` to customize:
 
@@ -88,19 +94,50 @@ cp .env.example .env
 
 ## Using with Other Providers
 
-To use with Backblaze B2 or Cloudflare R2, update the environment variables:
+The server supports configuring multiple providers (MinIO, R2, S3, etc.) simultaneously.
+
+### Single Provider Configuration
+
+To switch the default provider (e.g., to R2), update `.env`:
 
 ```bash
-# Backblaze B2
-MINIO_ENDPOINT=https://s3.us-west-002.backblazeb2.com
-MINIO_ACCESS_KEY=your-key-id
-MINIO_SECRET_KEY=your-application-key
-
 # Cloudflare R2
 MINIO_ENDPOINT=https://your-account-id.r2.cloudflarestorage.com
 MINIO_ACCESS_KEY=your-access-key
 MINIO_SECRET_KEY=your-secret-key
 ```
+
+### Multi-Provider Configuration
+
+You can configure multiple providers in `.env`:
+
+```bash
+# MinIO (Default)
+MINIO_ENDPOINT=http://localhost:9000...
+
+# Cloudflare R2
+R2_ENDPOINT=https://account.r2.cloudflarestorage.com
+R2_ACCESS_KEY=your-access-key
+R2_SECRET_KEY=your-secret-key
+
+# AWS S3
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=your-key
+AWS_SECRET_ACCESS_KEY=your-secret
+```
+
+Then you can switch providers dynamically in your code:
+
+```typescript
+// Use default provider
+await storeKit.uploadFile(...)
+
+// Use specific provider
+await storeKit.useProvider('cloudflare-r2').uploadFile(...)
+```
+
+Test the multi-provider health check:
+`GET /example/multi-provider?provider=cloudflare-r2`
 
 ## Cleanup
 

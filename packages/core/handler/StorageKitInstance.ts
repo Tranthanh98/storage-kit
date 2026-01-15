@@ -15,6 +15,7 @@ import {
   type SignedUrlResponse,
   type UploadOptions,
 } from "../providers/storageService";
+import type { StorageProvider } from "./types";
 
 /**
  * Options for the Storage Kit instance.
@@ -37,38 +38,17 @@ export interface StorageKitInstanceConfig {
 }
 
 /**
- * Service interface for programmatic storage operations.
- *
- * This interface provides direct access to storage operations without HTTP.
- * Use this when you need to perform storage operations from your application code.
+ * Interface for provider-scoped storage kit operations.
+ * Returned by `useProvider()` method for operations against a specific provider.
  */
-export interface IStorageKitService {
+export interface IProviderScopedStorageKit {
   /**
    * Get the underlying storage service for advanced operations.
    */
   readonly storage: IStorageService;
 
   /**
-   * Upload a file to storage.
-   *
-   * @param bucket - Bucket name (use "_" to use defaultBucket)
-   * @param file - File content as Buffer or Uint8Array
-   * @param fileName - Name of the file
-   * @param pathFolder - Optional folder path prefix
-   * @param options - Upload options (contentType, upsert)
-   * @returns Promise resolving to upload response with URL and key
-   *
-   * @example
-   * ```typescript
-   * const result = await storeKit.uploadFile(
-   *   "my-bucket",
-   *   buffer,
-   *   "avatar.png",
-   *   "users/123",
-   *   { contentType: "image/png" }
-   * );
-   * console.log(result.url); // Public URL of the uploaded file
-   * ```
+   * Upload a file to storage using this provider.
    */
   uploadFile(
     bucket: string,
@@ -79,53 +59,17 @@ export interface IStorageKitService {
   ): Promise<FileUploadResponse>;
 
   /**
-   * Delete a single file from storage.
-   *
-   * @param bucket - Bucket name (use "_" to use defaultBucket)
-   * @param key - The file key (path) to delete
-   *
-   * @example
-   * ```typescript
-   * await storeKit.deleteFile("my-bucket", "users/123/avatar.png");
-   * ```
+   * Delete a single file from storage using this provider.
    */
   deleteFile(bucket: string, key: string): Promise<void>;
 
   /**
-   * Delete multiple files from storage.
-   *
-   * @param bucket - Bucket name (use "_" to use defaultBucket)
-   * @param keys - Array of file keys to delete (max 1000)
-   * @returns Promise resolving to bulk delete response
-   *
-   * @example
-   * ```typescript
-   * const result = await storeKit.deleteFiles("my-bucket", [
-   *   "users/123/avatar.png",
-   *   "users/123/cover.jpg"
-   * ]);
-   * console.log(`Deleted ${result.deleted} files`);
-   * ```
+   * Delete multiple files from storage using this provider.
    */
   deleteFiles(bucket: string, keys: string[]): Promise<BulkDeleteResponse>;
 
   /**
-   * Generate a presigned URL for file upload.
-   *
-   * @param bucket - Bucket name (use "_" to use defaultBucket)
-   * @param key - The file key (path) for the upload
-   * @param options - Signed URL options (contentType, expiresIn)
-   * @returns Promise resolving to signed URL response
-   *
-   * @example
-   * ```typescript
-   * const result = await storeKit.getPresignedUploadUrl(
-   *   "my-bucket",
-   *   "users/123/avatar.png",
-   *   { contentType: "image/png", expiresIn: 3600 }
-   * );
-   * // Client can PUT to result.signedUrl
-   * ```
+   * Generate a presigned URL for file upload using this provider.
    */
   getPresignedUploadUrl(
     bucket: string,
@@ -134,22 +78,7 @@ export interface IStorageKitService {
   ): Promise<SignedUrlResponse>;
 
   /**
-   * Generate a presigned URL for file download.
-   *
-   * @param bucket - Bucket name (use "_" to use defaultBucket)
-   * @param key - The file key (path) for the download
-   * @param options - Signed URL options (expiresIn)
-   * @returns Promise resolving to signed URL response
-   *
-   * @example
-   * ```typescript
-   * const result = await storeKit.getPresignedDownloadUrl(
-   *   "my-bucket",
-   *   "users/123/avatar.png",
-   *   { expiresIn: 3600 }
-   * );
-   * // Client can GET from result.signedUrl
-   * ```
+   * Generate a presigned URL for file download using this provider.
    */
   getPresignedDownloadUrl(
     bucket: string,
@@ -158,31 +87,48 @@ export interface IStorageKitService {
   ): Promise<SignedUrlResponse>;
 
   /**
-   * Check the health of the storage provider.
-   *
-   * @returns Promise resolving to health check response
-   *
-   * @example
-   * ```typescript
-   * const health = await storeKit.healthCheck();
-   * if (health.status === "healthy") {
-   *   console.log(`Connected to ${health.provider}`);
-   * }
-   * ```
+   * Check the health of this provider.
    */
   healthCheck(): Promise<HealthCheckResponse>;
 
   /**
-   * Get a bucket-scoped service for simpler API.
+   * Get a bucket-scoped service for simpler API using this provider.
+   */
+  bucket(bucketName: string): IStorageService;
+}
+
+/**
+ * Service interface for programmatic storage operations.
+ *
+ * This interface provides direct access to storage operations without HTTP.
+ * Use this when you need to perform storage operations from your application code.
+ */
+export interface IStorageKitService extends IProviderScopedStorageKit {
+  /**
+   * Switch to a specific provider for subsequent operations.
+   * Returns a provider-scoped storage kit that uses the specified provider.
    *
-   * @param bucketName - The bucket to scope to
-   * @returns A bucket-scoped storage service
+   * @param providerType - The provider type (must be configured in `providers` map)
+   * @returns A provider-scoped storage kit instance
+   * @throws {StorageError} PROVIDER_NOT_CONFIGURED if provider is not configured
    *
    * @example
    * ```typescript
-   * const avatarBucket = storeKit.bucket("avatars");
-   * const result = await avatarBucket.uploadFile(buffer, "user123.png");
+   * // Configure with multiple providers
+   * const storeKit = createStorageKit({
+   *   provider: "minio",
+   *   providers: {
+   *     minio: { endpoint: "...", accessKeyId: "...", secretAccessKey: "..." },
+   *     "cloudflare-r2": { endpoint: "...", accessKeyId: "...", secretAccessKey: "..." },
+   *   },
+   * });
+   *
+   * // Use default provider (minio)
+   * await storeKit.bucket("images").deleteFile("old.png");
+   *
+   * // Switch to R2 for specific operation
+   * await storeKit.useProvider("cloudflare-r2").bucket("images").deleteFile("new.png");
    * ```
    */
-  bucket(bucketName: string): IStorageService;
+  useProvider(providerType: StorageProvider): IProviderScopedStorageKit;
 }

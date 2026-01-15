@@ -67,6 +67,34 @@ app.get("/example/health", async (_req, res) => {
   }
 });
 
+// Example: Multi-provider usage
+// Try: /example/multi-provider?provider=minio
+// Try: /example/multi-provider?provider=cloudflare-r2
+app.get("/example/multi-provider", async (req, res) => {
+  try {
+    const provider = req.query.provider as string;
+
+    // If a provider is specified, use it. Otherwise use default.
+    // We cast to any because we're taking arbitrary user input
+    // The library will throw if the provider is not configured
+    const service = provider
+      ? storeKit.useProvider(provider as any)
+      : storeKit;
+
+    const health = await service.healthCheck();
+
+    res.json({
+      message: `Health check for provider: ${provider || "default"}`,
+      result: health,
+    });
+  } catch (error) {
+    res.status(400).json({
+      error: (error as Error).message,
+      hint: "Make sure the provider is configured in store-kit.ts and .env",
+    });
+  }
+});
+
 // ============================================
 // Root endpoint with links
 // ============================================
@@ -88,6 +116,7 @@ app.get("/", (_req, res) => {
     examples: {
       presignedUrl: "/example/presigned-url",
       health: "/example/health",
+      multiProvider: "/example/multi-provider?provider=minio",
     },
   });
 });
@@ -108,6 +137,7 @@ app.listen(PORT, () => {
 |  Example endpoints (using storeKit as service):                   |
 |    - GET /example/presigned-url                                   |
 |    - GET /example/health                                          |
+|    - GET /example/multi-provider?provider=minio                   |
 |                                                                   |
 |  Make sure MinIO is running:                                      |
 |    docker-compose up -d                                           |

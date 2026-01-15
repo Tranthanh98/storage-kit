@@ -3,6 +3,8 @@
  *
  * Provides framework-agnostic implementation of IStorageKitService.
  * Framework adapters extend this to add their specific route handler.
+ *
+ * Supports both single-provider (backward compatible) and multi-provider modes.
  */
 
 import {
@@ -15,8 +17,17 @@ import {
   type UploadOptions,
   StorageError,
 } from "../providers/storageService";
-import type { IStorageKitService } from "./StorageKitInstance";
-import type { StorageKitConfig } from "./types";
+import type {
+  IProviderScopedStorageKit,
+  IStorageKitService,
+} from "./StorageKitInstance";
+import { ProviderRegistry } from "./ProviderRegistry";
+import { ProviderScopedStorageKit } from "./ProviderScopedStorageKit";
+import {
+  type StorageKitConfig,
+  type StorageProvider,
+  isMultiProviderConfig,
+} from "./types";
 
 /**
  * Extended config that includes provider configuration.
@@ -30,7 +41,7 @@ export type BaseStorageKitConfig = StorageKitConfig & {
  * Factory function type for creating storage service.
  */
 function internalCreateStorageService(
-  provider: import("./types").StorageProvider,
+  provider: StorageProvider,
   config?: any
 ): IStorageService {
   switch (provider) {
@@ -47,7 +58,9 @@ function internalCreateStorageService(
         config
       );
     case "s3":
-      return new (require("../providers/amazonS3StorageService").AmazonS3StorageService)(config);
+      return new (require("../providers/amazonS3StorageService").AmazonS3StorageService)(
+        config
+      );
     case "gcs":
       return new (require("../providers/googleCloudStorageService").GoogleCloudStorageService)(
         config
@@ -70,9 +83,10 @@ function internalCreateStorageService(
  *
  * Framework-specific adapters extend this class and implement the routeHandler.
  *
- * @example
+ * Supports both single-provider and multi-provider configurations:
+ *
+ * @example Single-provider (backward compatible)
  * ```typescript
- * // In your application
  * const kit = new ExpressStorageKit({
  *   provider: "minio",
  *   endpoint: "http://localhost:9000",
@@ -81,24 +95,68 @@ function internalCreateStorageService(
  *   defaultBucket: "my-bucket",
  * });
  *
- * // Use as route handler
  * app.use("/api/storage", kit.routeHandler());
- *
- * // Use as service
  * const result = await kit.uploadFile("my-bucket", buffer, "image.png");
+ * ```
+ *
+ * @example Multi-provider
+ * ```typescript
+ * const kit = createStorageKit({
+ *   provider: "minio", // default provider
+ *   providers: {
+ *     minio: { endpoint: "...", accessKeyId: "...", secretAccessKey: "..." },
+ *     "cloudflare-r2": { endpoint: "...", accessKeyId: "...", secretAccessKey: "..." },
+ *   },
+ *   defaultBucket: "my-bucket",
+ * });
+ *
+ * // Use default provider
+ * await kit.bucket("images").deleteFile("old.png");
+ *
+ * // Switch to R2 for specific operation
+ * await kit.useProvider("cloudflare-r2").bucket("images").deleteFile("new.png");
  * ```
  */
 export class BaseStorageKit implements IStorageKitService {
   protected readonly _storage: IStorageService;
   protected readonly _config: BaseStorageKitConfig;
+  protected readonly _registry: ProviderRegistry | null;
+  protected readonly _defaultProviderName: StorageProvider;
 
   constructor(config: BaseStorageKitConfig) {
     this._config = config;
 
-    // Create storage service from config or use provided instance
-    this._storage =
-      config.storage ??
-      internalCreateStorageService(config.provider, config);
+    if (isMultiProviderConfig(config)) {
+      // Multi-provider mode
+      const defaultProvider = config.provider;
+
+      // Validate that default provider exists in providers map
+      if (!config.providers[defaultProvider]) {
+        const availableProviders = Object.keys(config.providers);
+        throw new StorageError(
+          "PROVIDER_NOT_CONFIGURED",
+          `Default provider "${defaultProvider}" is not configured in providers map. Available providers: ${
+            availableProviders.length > 0
+              ? availableProviders.join(", ")
+              : "(none)"
+          }`,
+          { requestedProvider: defaultProvider, availableProviders }
+        );
+      }
+
+      // Create provider registry with all configured providers
+      this._registry = new ProviderRegistry(config.providers);
+      this._storage =
+        config.storage ?? this._registry.get(defaultProvider);
+      this._defaultProviderName = defaultProvider;
+    } else {
+      // Single-provider mode (backward compatible)
+      this._registry = null;
+      this._storage =
+        config.storage ??
+        internalCreateStorageService(config.provider, config);
+      this._defaultProviderName = config.provider;
+    }
   }
 
   /**
@@ -131,6 +189,51 @@ export class BaseStorageKit implements IStorageKitService {
       );
     }
     return bucket;
+  }
+
+  /**
+   * Switch to a specific provider for subsequent operations.
+   * Returns a provider-scoped storage kit that uses the specified provider.
+   *
+   * @param providerType - The provider type (must be configured in `providers` map)
+   * @returns A provider-scoped storage kit instance
+   * @throws {StorageError} PROVIDER_NOT_CONFIGURED if provider is not configured
+   *
+   * @example
+   * ```typescript
+   * // Switch to R2 for specific operation
+   * await storeKit.useProvider("cloudflare-r2").bucket("images").deleteFile("photo.jpg");
+   * ```
+   */
+  useProvider(providerType: StorageProvider): IProviderScopedStorageKit {
+    if (!this._registry) {
+      // Single-provider mode - check if requesting the only available provider
+      if (providerType === this._defaultProviderName) {
+        return new ProviderScopedStorageKit(this._storage, {
+          defaultBucket: this._config.defaultBucket,
+          onUploadComplete: this._config.onUploadComplete,
+        });
+      }
+
+      throw new StorageError(
+        "PROVIDER_NOT_CONFIGURED",
+        `Provider "${providerType}" is not configured. Multi-provider mode is not enabled. ` +
+          `Only the default provider "${this._defaultProviderName}" is available. ` +
+          `To use multiple providers, configure with a "providers" map.`,
+        {
+          requestedProvider: providerType,
+          availableProviders: [this._defaultProviderName],
+          multiProviderEnabled: false,
+        }
+      );
+    }
+
+    // Multi-provider mode - get from registry
+    const storage = this._registry.get(providerType);
+    return new ProviderScopedStorageKit(storage, {
+      defaultBucket: this._config.defaultBucket,
+      onUploadComplete: this._config.onUploadComplete,
+    });
   }
 
   /**

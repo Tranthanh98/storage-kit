@@ -5,6 +5,7 @@ A unified, framework-agnostic storage service for S3-compatible providers (AWS S
 ## Features
 
 - **Unified API** - Same interface for all S3-compatible storage providers
+- **Multi-Provider Support** - Configure multiple providers and switch between them dynamically
 - **Framework Adapters** - Plug-and-play support for Express, Fastify, Hono, and NestJS
 - **Built-in Swagger UI** - Interactive API documentation at `/reference`
 - **TypeScript First** - Full type safety with comprehensive type definitions
@@ -279,6 +280,71 @@ const storeKit = createStorageKit({
   onUploadComplete: (result) => console.log("Uploaded:", result),
   onError: (error) => console.error("Error:", error),
 });
+```
+
+### Multi-Provider Configuration
+
+Storage Kit supports configuring multiple storage providers and switching between them at runtime using `useProvider()`. This is useful for:
+
+- **Multi-region deployments** - Store files closer to users
+- **Hybrid cloud** - Use different providers for different use cases
+- **Migration** - Gradually migrate from one provider to another
+- **Redundancy** - Upload to multiple providers for backup
+
+```typescript
+import { createStorageKit } from "@storage-kit/express";
+
+// Configure multiple providers
+const storeKit = createStorageKit({
+  provider: "minio", // Default provider
+  providers: {
+    minio: {
+      endpoint: "http://localhost:9000",
+      accessKeyId: "minioadmin",
+      secretAccessKey: "minioadmin",
+    },
+    "cloudflare-r2": {
+      endpoint: "https://account.r2.cloudflarestorage.com",
+      accessKeyId: process.env.R2_ACCESS_KEY!,
+      secretAccessKey: process.env.R2_SECRET_KEY!,
+    },
+    s3: {
+      region: "us-east-1",
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    },
+  },
+  defaultBucket: "my-bucket",
+});
+
+// Use default provider (minio)
+await storeKit.deleteFile("_", "old-file.png");
+
+// Switch to R2 for specific operation
+await storeKit.useProvider("cloudflare-r2").deleteFile("_", "cdn-file.png");
+
+// Switch to S3
+await storeKit.useProvider("s3").bucket("archives").uploadFile(
+  buffer,
+  "backup.zip"
+);
+
+// Get bucket-scoped service for a specific provider
+const r2Bucket = storeKit.useProvider("cloudflare-r2").bucket("images");
+await r2Bucket.uploadFile(buffer, "photo.jpg");
+```
+
+**Provider Types:**
+
+| Type           | Description             |
+| -------------- | ----------------------- |
+| `minio`        | MinIO                   |
+| `s3`           | Amazon S3               |
+| `cloudflare-r2`| Cloudflare R2           |
+| `backblaze`    | Backblaze B2            |
+| `gcs`          | Google Cloud Storage    |
+| `spaces`       | DigitalOcean Spaces     |
+| `azure`        | Azure Blob Storage      |
 ```
 
 ---
@@ -809,6 +875,7 @@ try {
 | `INVALID_SIGNED_URL_TYPE` | 400         | Invalid signed URL type                 |
 | `EMPTY_KEYS_ARRAY`        | 400         | The keys array for bulk delete is empty |
 | `KEYS_LIMIT_EXCEEDED`     | 400         | The keys array exceeds 1000 items       |
+| `PROVIDER_NOT_CONFIGURED` | 400         | Requested provider is not configured    |
 | `UPLOAD_FAILED`           | 500         | File upload failed                      |
 | `DELETE_FAILED`           | 500         | File deletion failed                    |
 | `SIGNED_URL_FAILED`       | 500         | Failed to generate presigned URL        |
