@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Storage Kit API
   description: |
-    A unified HTTP API for S3-compatible storage providers (MinIO, Backblaze B2, Cloudflare R2).
+    A unified HTTP API for S3-compatible storage providers (AWS S3, MinIO, Backblaze B2, Cloudflare R2, GCS, Spaces) and Azure Blob Storage.
     
     This specification defines a framework-agnostic API contract for file storage operations
     that can be implemented with any HTTP framework (Express, Fastify, Hono, etc.).

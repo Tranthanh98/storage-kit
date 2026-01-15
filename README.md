@@ -1,6 +1,6 @@
 # Storage Kit
 
-A unified, framework-agnostic storage service for S3-compatible providers (MinIO, Backblaze B2, Cloudflare R2).
+A unified, framework-agnostic storage service for S3-compatible providers (AWS S3, Google Cloud Storage, DigitalOcean Spaces, MinIO, Backblaze B2, Cloudflare R2) and Azure Blob Storage.
 
 ## Features
 
@@ -844,6 +844,34 @@ try {
 | `CLOUDFLARE_R2_ACCESS_KEY_ID`     | R2 access key ID          |
 | `CLOUDFLARE_R2_SECRET_ACCESS_KEY` | R2 secret access key      |
 | `CLOUDFLARE_R2_PUBLIC_URL`        | Public URL base           |
+
+### AWS S3
+
+| Variable                | Description           | Default       |
+| ----------------------- | --------------------- | ------------- |
+| `AWS_ACCESS_KEY_ID`     | AWS Access Key ID     |               |
+| `AWS_SECRET_ACCESS_KEY` | AWS Secret Access Key |               |
+| `AWS_REGION`            | AWS Region            | `us-east-1`   |
+
+### Google Cloud Storage (via S3 Interop)
+
+| Variable                | Description           | Default       |
+| ----------------------- | --------------------- | ------------- |
+| `GCS_ACCESS_KEY_ID`     | HMAC Access Key       |               |
+| `GCS_SECRET_ACCESS_KEY` | HMAC Secret           |               |
+
+### DigitalOcean Spaces
+
+| Variable                | Description           | Default       |
+| ----------------------- | --------------------- | ------------- |
+| `DO_SPACES_ENDPOINT`    | Spaces Endpoint       |               |
+| `DO_SPACES_KEY`         | Spaces Key            |               |
+| `DO_SPACES_SECRET`      | Spaces Secret         |               |
+| `DO_SPACES_PUBLIC_URL`  | Public URL base       |               |
+
+### Azure Blob Storage (Optional Env Vars, prefer config)
+
+Storage Kit does not automatically load standard Azure env vars like `AZURE_STORAGE_CONNECTION_STRING` by default to avoid conflicts, but you can pass them in config.
 
 ---
 

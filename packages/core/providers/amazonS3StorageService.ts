@@ -17,7 +17,6 @@ import {
   type SignedUrlOptions,
   type SignedUrlResponse,
   StorageError,
-
   type UploadOptions,
 } from "./storageService";
 
@@ -28,17 +27,16 @@ const DEFAULT_SIGNED_URL_EXPIRATION = 3600;
 const MAX_BULK_DELETE_KEYS = 1000;
 
 /**
- * Storage service implementation for MinIO (S3-compatible).
+ * Storage service implementation for Amazon S3.
  *
- * MinIO is a high-performance, S3 compatible object storage solution.
- * This implementation uses the AWS S3 SDK with path-style addressing.
+ * This implementation uses the official AWS S3 SDK.
  *
  * @example
  * ```typescript
- * const storage = new MinioStorageService({
- *   endpoint: "http://localhost:9000",
- *   accessKeyId: "minioadmin",
- *   secretAccessKey: "minioadmin",
+ * const storage = new AmazonS3StorageService({
+ *   region: "us-east-1",
+ *   accessKeyId: "your-access-key",
+ *   secretAccessKey: "your-secret-key",
  * });
  *
  * const result = await storage
@@ -46,19 +44,20 @@ const MAX_BULK_DELETE_KEYS = 1000;
  *   .uploadFile(buffer, "image.png");
  * ```
  */
-export class MinioStorageService implements IStorageService {
+export class AmazonS3StorageService implements IStorageService {
   private s3Client: S3Client;
   private currentBucket: string = "";
   private readonly config: S3Config;
 
   constructor(config?: Partial<S3Config>) {
     this.config = {
-      endpoint: config?.endpoint ?? process.env.MINIO_ENDPOINT ?? "http://localhost:9000",
-      accessKeyId: config?.accessKeyId ?? process.env.MINIO_ACCESS_KEY ?? "minioadmin",
-      secretAccessKey: config?.secretAccessKey ?? process.env.MINIO_SECRET_KEY ?? "minioadmin",
-      region: config?.region ?? "us-east-1",
+      endpoint: config?.endpoint, // Optional for AWS S3 (derived from region)
+      accessKeyId: config?.accessKeyId ?? process.env.AWS_ACCESS_KEY_ID ?? "",
+      secretAccessKey: config?.secretAccessKey ?? process.env.AWS_SECRET_ACCESS_KEY ?? "",
+      region: config?.region ?? process.env.AWS_REGION ?? "us-east-1",
       publicUrlBase: config?.publicUrlBase,
       defaultSignedUrlExpiration: config?.defaultSignedUrlExpiration ?? DEFAULT_SIGNED_URL_EXPIRATION,
+      type: "s3",
     };
 
     this.s3Client = new S3Client({
@@ -68,7 +67,7 @@ export class MinioStorageService implements IStorageService {
         accessKeyId: this.config.accessKeyId,
         secretAccessKey: this.config.secretAccessKey,
       },
-      forcePathStyle: true, // Required for MinIO
+      // forcePathStyle defaults to false, which is correct for AWS S3 (virtual-hosted style)
     });
   }
 
@@ -106,8 +105,11 @@ export class MinioStorageService implements IStorageService {
    * Get the public URL for a key.
    */
   private getPublicUrl(key: string): string {
-    const base = this.config.publicUrlBase ?? this.config.endpoint;
-    return `${base}/${this.currentBucket}/${key}`;
+    if (this.config.publicUrlBase) {
+      return `${this.config.publicUrlBase}/${key}`;
+    }
+    // Standard AWS S3 URL format: https://bucket.s3.region.amazonaws.com/key
+    return `https://${this.currentBucket}.s3.${this.config.region}.amazonaws.com/${key}`;
   }
 
   /**
@@ -328,26 +330,25 @@ export class MinioStorageService implements IStorageService {
    */
   async healthCheck(): Promise<HealthCheckResponse> {
     try {
-      // Try to list buckets or check a specific bucket
       if (this.currentBucket) {
         const command = new HeadBucketCommand({ Bucket: this.currentBucket });
         await this.s3Client.send(command);
       } else {
-        // Just verify we can connect by listing with max 1
+        // Just verify we can connect
         const command = new ListObjectsV2Command({
-          Bucket: "health-check-bucket",
+          Bucket: "health-check-bucket", // This might fail if bucket doesn't exist, which is expected
           MaxKeys: 1,
         });
         try {
           await this.s3Client.send(command);
         } catch {
-          // Bucket not existing is fine, we just want to verify connectivity
+          // Bucket not existing is fine
         }
       }
 
       return {
         status: "healthy",
-        provider: "minio",
+        provider: "s3",
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";

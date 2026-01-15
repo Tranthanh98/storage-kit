@@ -38,12 +38,12 @@ export interface SwaggerOptions {
 /**
  * Hono-specific configuration options.
  */
-export interface HonoStorageKitConfig extends StorageKitConfig {
+export type HonoStorageKitConfig = StorageKitConfig & {
   /** Custom storage service instance (overrides provider config) */
   storage?: IStorageService;
   /** Enable Swagger UI at /reference (default: true) */
   swagger?: boolean | SwaggerOptions;
-}
+};
 
 /**
  * Convert Hono File to normalized UploadedFile interface.
@@ -316,13 +316,7 @@ export class HonoStorageKit implements IHonoStorageKitService {
     // Create storage service from config or use provided instance
     this._storage =
       config.storage ??
-      createStorageService(config.provider, {
-        endpoint: config.endpoint,
-        accessKeyId: config.accessKeyId,
-        secretAccessKey: config.secretAccessKey,
-        region: config.region,
-        publicUrlBase: config.publicUrlBase,
-      });
+      createStorageService(config.provider, config as any);
   }
 
   get storage(): IStorageService {

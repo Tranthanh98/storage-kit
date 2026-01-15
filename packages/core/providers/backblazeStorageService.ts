@@ -13,10 +13,11 @@ import {
   type FileUploadResponse,
   type HealthCheckResponse,
   type IStorageService,
+  type S3Config,
   type SignedUrlOptions,
   type SignedUrlResponse,
-  type StorageConfig,
   StorageError,
+
   type UploadOptions,
 } from "./storageService";
 
@@ -50,9 +51,9 @@ const MAX_BULK_DELETE_KEYS = 1000;
 export class BackBlazeStorageService implements IStorageService {
   private s3Client: S3Client;
   private currentBucket: string = "";
-  private readonly config: StorageConfig;
+  private readonly config: S3Config;
 
-  constructor(config?: Partial<StorageConfig>) {
+  constructor(config?: Partial<S3Config>) {
     this.config = {
       endpoint: config?.endpoint ?? process.env.BACKBLAZE_ENDPOINT ?? "",
       accessKeyId: config?.accessKeyId ?? process.env.BACKBLAZE_KEY_ID ?? "",

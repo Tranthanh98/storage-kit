@@ -15,7 +15,7 @@ hero:
 
 features:
   - title: Unified API
-    details: Switch between MinIO, Backblaze B2, and Cloudflare R2 with zero code changes.
+    details: Switch between AWS S3, Azure Blob, Google Cloud, MinIO, R2, B2, and Spaces with zero code changes.
   - title: Framework Agnostic
     details: First-class adapters for Express, Fastify, Hono, and NestJS.
   - title: Type Safe

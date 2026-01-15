@@ -21,17 +21,17 @@ import type { StorageKitConfig } from "./types";
 /**
  * Extended config that includes provider configuration.
  */
-export interface BaseStorageKitConfig extends StorageKitConfig {
+export type BaseStorageKitConfig = StorageKitConfig & {
   /** Custom storage service instance (overrides provider config) */
   storage?: IStorageService;
-}
+};
 
 /**
  * Factory function type for creating storage service.
  */
 function internalCreateStorageService(
-  provider: "minio" | "backblaze" | "cloudflare-r2",
-  config?: Partial<import("../providers/storageService").StorageConfig>
+  provider: import("./types").StorageProvider,
+  config?: any
 ): IStorageService {
   switch (provider) {
     case "minio":
@@ -44,6 +44,20 @@ function internalCreateStorageService(
       );
     case "cloudflare-r2":
       return new (require("../providers/cloudflareR2StorageService").CloudflareR2StorageService)(
+        config
+      );
+    case "s3":
+      return new (require("../providers/amazonS3StorageService").AmazonS3StorageService)(config);
+    case "gcs":
+      return new (require("../providers/googleCloudStorageService").GoogleCloudStorageService)(
+        config
+      );
+    case "spaces":
+      return new (require("../providers/digitalOceanSpacesService").DigitalOceanSpacesService)(
+        config
+      );
+    case "azure":
+      return new (require("../providers/azureBlobStorageService").AzureBlobStorageService)(
         config
       );
     default:
@@ -84,13 +98,7 @@ export class BaseStorageKit implements IStorageKitService {
     // Create storage service from config or use provided instance
     this._storage =
       config.storage ??
-      internalCreateStorageService(config.provider, {
-        endpoint: config.endpoint,
-        accessKeyId: config.accessKeyId,
-        secretAccessKey: config.secretAccessKey,
-        region: config.region,
-        publicUrlBase: config.publicUrlBase,
-      });
+      internalCreateStorageService(config.provider, config);
   }
 
   /**

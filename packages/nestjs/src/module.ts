@@ -236,13 +236,7 @@ export class StorageKitModule {
     // Create storage service from config or use provided instance
     const storage =
       config.storage ??
-      createStorageService(config.provider, {
-        endpoint: config.endpoint,
-        accessKeyId: config.accessKeyId,
-        secretAccessKey: config.secretAccessKey,
-        region: config.region,
-        publicUrlBase: config.publicUrlBase,
-      });
+      createStorageService(config.provider, config as any);
 
     const handler = new StorageHandler(storage, config);
 
@@ -318,13 +312,7 @@ export class StorageKitModule {
         useFactory: (config: NestJSStorageKitConfig): IStorageService => {
           return (
             config.storage ??
-            createStorageService(config.provider, {
-              endpoint: config.endpoint,
-              accessKeyId: config.accessKeyId,
-              secretAccessKey: config.secretAccessKey,
-              region: config.region,
-              publicUrlBase: config.publicUrlBase,
-            })
+            createStorageService(config.provider, config as any)
           );
         },
         inject: [STORAGE_KIT_CONFIG],

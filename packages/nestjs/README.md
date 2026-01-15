@@ -138,7 +138,7 @@ export class AvatarService {
 ```typescript
 interface NestJSStorageKitConfig {
   // Required
-  provider: "minio" | "backblaze" | "cloudflare-r2";
+  provider: "minio" | "backblaze" | "cloudflare-r2" | "s3" | "gcs" | "spaces" | "azure";
 
   // Provider credentials
   endpoint?: string;
@@ -146,6 +146,10 @@ interface NestJSStorageKitConfig {
   secretAccessKey?: string;
   region?: string;
   publicUrlBase?: string;
+  // Azure specific
+  connectionString?: string;
+  accountName?: string;
+  accountKey?: string;
 
   // Module options
   global?: boolean;        // Make module global

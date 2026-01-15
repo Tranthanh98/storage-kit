@@ -45,14 +45,14 @@ export interface SwaggerOptions {
 /**
  * Fastify-specific configuration options.
  */
-export interface FastifyStorageKitConfig extends StorageKitConfig {
+export type FastifyStorageKitConfig = StorageKitConfig & {
   /** Custom storage service instance (overrides provider config) */
   storage?: IStorageService;
   /** Route prefix for storage endpoints (default: none, uses Fastify register prefix) */
   prefix?: string;
   /** Enable Swagger UI at /reference (default: true) */
   swagger?: boolean | SwaggerOptions;
-}
+};
 
 /**
  * Load and customize OpenAPI spec for Swagger UI.
@@ -194,13 +194,7 @@ export class FastifyStorageKit implements IFastifyStorageKitService {
     // Create storage service from config or use provided instance
     this._storage =
       config.storage ??
-      createStorageService(config.provider, {
-        endpoint: config.endpoint,
-        accessKeyId: config.accessKeyId,
-        secretAccessKey: config.secretAccessKey,
-        region: config.region,
-        publicUrlBase: config.publicUrlBase,
-      });
+      createStorageService(config.provider, config as any);
   }
 
   get storage(): IStorageService {

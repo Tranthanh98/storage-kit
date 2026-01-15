@@ -7,6 +7,10 @@ A **Provider** is the underlying storage backend. Storage Kit supports any S3-co
 - `minio`
 - `backblaze`
 - `cloudflare-r2`
+- `s3` (Amazon S3)
+- `gcs` (Google Cloud Storage)
+- `azure` (Azure Blob Storage)
+- `spaces` (DigitalOcean Spaces)
 
 ## Bucket
 

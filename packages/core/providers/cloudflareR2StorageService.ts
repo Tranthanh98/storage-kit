@@ -13,10 +13,11 @@ import {
   type FileUploadResponse,
   type HealthCheckResponse,
   type IStorageService,
+  type S3Config,
   type SignedUrlOptions,
   type SignedUrlResponse,
-  type StorageConfig,
   StorageError,
+
   type UploadOptions,
 } from "./storageService";
 
@@ -49,9 +50,9 @@ const MAX_BULK_DELETE_KEYS = 1000;
 export class CloudflareR2StorageService implements IStorageService {
   private s3Client: S3Client;
   private currentBucket: string = "";
-  private readonly config: StorageConfig;
+  private readonly config: S3Config;
 
-  constructor(config?: Partial<StorageConfig>) {
+  constructor(config?: Partial<S3Config>) {
     this.config = {
       endpoint: config?.endpoint ?? process.env.CLOUDFLARE_R2_ENDPOINT ?? "",
       accessKeyId: config?.accessKeyId ?? process.env.CLOUDFLARE_R2_ACCESS_KEY_ID ?? "",

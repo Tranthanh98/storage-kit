@@ -42,12 +42,12 @@ export interface SwaggerOptions {
 /**
  * Express-specific configuration options.
  */
-export interface ExpressStorageKitConfig extends StorageKitConfig {
+export type ExpressStorageKitConfig = StorageKitConfig & {
   /** Custom storage service instance (overrides provider config) */
   storage?: IStorageService;
   /** Enable Swagger UI at /reference (default: true) */
   swagger?: boolean | SwaggerOptions;
-}
+};
 
 /**
  * Convert multer file to normalized UploadedFile interface.

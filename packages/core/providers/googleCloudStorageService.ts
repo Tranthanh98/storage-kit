@@ -17,7 +17,6 @@ import {
   type SignedUrlOptions,
   type SignedUrlResponse,
   StorageError,
-
   type UploadOptions,
 } from "./storageService";
 
@@ -28,17 +27,16 @@ const DEFAULT_SIGNED_URL_EXPIRATION = 3600;
 const MAX_BULK_DELETE_KEYS = 1000;
 
 /**
- * Storage service implementation for MinIO (S3-compatible).
+ * Storage service implementation for Google Cloud Storage (via S3 Interoperability).
  *
- * MinIO is a high-performance, S3 compatible object storage solution.
- * This implementation uses the AWS S3 SDK with path-style addressing.
+ * This implementation uses the AWS S3 SDK to communicate with GCS using its S3-compatible XML API.
+ * Users must generate HMAC keys in the Google Cloud Console.
  *
  * @example
  * ```typescript
- * const storage = new MinioStorageService({
- *   endpoint: "http://localhost:9000",
- *   accessKeyId: "minioadmin",
- *   secretAccessKey: "minioadmin",
+ * const storage = new GoogleCloudStorageService({
+ *   accessKeyId: "GOOG...",
+ *   secretAccessKey: "...",
  * });
  *
  * const result = await storage
@@ -46,19 +44,20 @@ const MAX_BULK_DELETE_KEYS = 1000;
  *   .uploadFile(buffer, "image.png");
  * ```
  */
-export class MinioStorageService implements IStorageService {
+export class GoogleCloudStorageService implements IStorageService {
   private s3Client: S3Client;
   private currentBucket: string = "";
   private readonly config: S3Config;
 
   constructor(config?: Partial<S3Config>) {
     this.config = {
-      endpoint: config?.endpoint ?? process.env.MINIO_ENDPOINT ?? "http://localhost:9000",
-      accessKeyId: config?.accessKeyId ?? process.env.MINIO_ACCESS_KEY ?? "minioadmin",
-      secretAccessKey: config?.secretAccessKey ?? process.env.MINIO_SECRET_KEY ?? "minioadmin",
-      region: config?.region ?? "us-east-1",
-      publicUrlBase: config?.publicUrlBase,
+      endpoint: config?.endpoint ?? "https://storage.googleapis.com",
+      accessKeyId: config?.accessKeyId ?? process.env.GCS_ACCESS_KEY_ID ?? "",
+      secretAccessKey: config?.secretAccessKey ?? process.env.GCS_SECRET_ACCESS_KEY ?? "",
+      region: config?.region ?? "auto", // Region is determined by the bucket location
+      publicUrlBase: config?.publicUrlBase, // Optional override
       defaultSignedUrlExpiration: config?.defaultSignedUrlExpiration ?? DEFAULT_SIGNED_URL_EXPIRATION,
+      type: "gcs",
     };
 
     this.s3Client = new S3Client({
@@ -68,7 +67,7 @@ export class MinioStorageService implements IStorageService {
         accessKeyId: this.config.accessKeyId,
         secretAccessKey: this.config.secretAccessKey,
       },
-      forcePathStyle: true, // Required for MinIO
+      forcePathStyle: true, // GCS works best with path style for the global endpoint
     });
   }
 
@@ -106,8 +105,11 @@ export class MinioStorageService implements IStorageService {
    * Get the public URL for a key.
    */
   private getPublicUrl(key: string): string {
-    const base = this.config.publicUrlBase ?? this.config.endpoint;
-    return `${base}/${this.currentBucket}/${key}`;
+    if (this.config.publicUrlBase) {
+      return `${this.config.publicUrlBase}/${key}`;
+    }
+    // Default GCS public URL format: https://storage.googleapis.com/bucket/key
+    return `${this.config.endpoint}/${this.currentBucket}/${key}`;
   }
 
   /**
@@ -129,7 +131,7 @@ export class MinioStorageService implements IStorageService {
         Key: key,
         Body: file,
         ContentType: options?.contentType ?? "application/octet-stream",
-        CacheControl: "max-age=8640000", // 100 days
+        CacheControl: "max-age=8640000",
       });
 
       await this.s3Client.send(command);
@@ -167,7 +169,6 @@ export class MinioStorageService implements IStorageService {
     this.ensureBucket();
 
     try {
-      // Check if file exists first
       const listCommand = new ListObjectsV2Command({
         Bucket: this.currentBucket,
         Prefix: key,
@@ -175,7 +176,6 @@ export class MinioStorageService implements IStorageService {
       });
       const listResponse = await this.s3Client.send(listCommand);
 
-      // Verify exact match (not just prefix match)
       const exists = listResponse.Contents?.some((obj) => obj.Key === key);
       if (!exists) {
         throw new StorageError("FILE_NOT_FOUND", "The requested file does not exist", {
@@ -328,12 +328,10 @@ export class MinioStorageService implements IStorageService {
    */
   async healthCheck(): Promise<HealthCheckResponse> {
     try {
-      // Try to list buckets or check a specific bucket
       if (this.currentBucket) {
         const command = new HeadBucketCommand({ Bucket: this.currentBucket });
         await this.s3Client.send(command);
       } else {
-        // Just verify we can connect by listing with max 1
         const command = new ListObjectsV2Command({
           Bucket: "health-check-bucket",
           MaxKeys: 1,
@@ -341,13 +339,13 @@ export class MinioStorageService implements IStorageService {
         try {
           await this.s3Client.send(command);
         } catch {
-          // Bucket not existing is fine, we just want to verify connectivity
+          // Ignore
         }
       }
 
       return {
         status: "healthy",
-        provider: "minio",
+        provider: "gcs",
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";

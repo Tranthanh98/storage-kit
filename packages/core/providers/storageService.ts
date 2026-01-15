@@ -118,22 +118,59 @@ export interface HealthCheckResponse {
 }
 
 /**
- * Configuration options for storage providers.
+ * Base configuration options for all storage providers.
  */
-export interface StorageConfig {
-  /** S3-compatible endpoint URL */
-  endpoint: string;
-  /** Access key ID */
-  accessKeyId: string;
-  /** Secret access key */
-  secretAccessKey: string;
-  /** AWS region (use 'auto' for R2, 'us-east-1' for MinIO) */
-  region?: string;
+export interface BaseStorageConfig {
   /** Public URL base for generating file URLs (optional) */
   publicUrlBase?: string;
   /** Default expiration time for presigned URLs in seconds */
   defaultSignedUrlExpiration?: number;
 }
+
+/**
+ * Configuration for S3-compatible providers (AWS S3, MinIO, R2, B2, GCS, Spaces).
+ */
+export interface S3Config extends BaseStorageConfig {
+  type?: "s3" | "minio" | "r2" | "backblaze" | "gcs" | "spaces";
+  /** S3-compatible endpoint URL */
+  endpoint?: string;
+  /** Access key ID */
+  accessKeyId: string;
+  /** Secret access key */
+  secretAccessKey: string;
+  /** AWS region */
+  region?: string;
+}
+
+/**
+ * Configuration for Azure Blob Storage using connection string.
+ */
+export interface AzureConfigConnectionString extends BaseStorageConfig {
+  type: "azure";
+  /** Azure connection string */
+  connectionString: string;
+}
+
+/**
+ * Configuration for Azure Blob Storage using account name and key.
+ */
+export interface AzureConfigAccount extends BaseStorageConfig {
+  type: "azure";
+  /** Azure storage account name */
+  accountName: string;
+  /** Azure storage account key */
+  accountKey: string;
+}
+
+/**
+ * Configuration for Azure Blob Storage.
+ */
+export type AzureConfig = AzureConfigConnectionString | AzureConfigAccount;
+
+/**
+ * Configuration options for storage providers.
+ */
+export type StorageConfig = S3Config | AzureConfig;
 
 /**
  * Interface defining the storage service contract.

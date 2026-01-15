@@ -22,7 +22,7 @@ export interface SwaggerOptions {
 /**
  * NestJS-specific configuration options.
  */
-export interface NestJSStorageKitConfig extends StorageKitConfig {
+export type NestJSStorageKitConfig = StorageKitConfig & {
   /** Custom storage service instance (overrides provider config) */
   storage?: IStorageService;
   /** Route prefix for storage endpoints (default: "storage") */
@@ -31,7 +31,7 @@ export interface NestJSStorageKitConfig extends StorageKitConfig {
   global?: boolean;
   /** Enable Swagger UI at /reference (default: true) */
   swagger?: boolean | SwaggerOptions;
-}
+};
 
 /**
  * Options factory for async configuration.

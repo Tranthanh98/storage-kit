@@ -157,7 +157,7 @@ export const storeKit = createStorageKit({
 ```typescript
 interface ExpressStorageKitConfig {
   // Required
-  provider: "minio" | "backblaze" | "cloudflare-r2";
+  provider: "minio" | "backblaze" | "cloudflare-r2" | "s3" | "gcs" | "spaces" | "azure";
 
   // Provider credentials
   endpoint?: string;
@@ -165,6 +165,10 @@ interface ExpressStorageKitConfig {
   secretAccessKey?: string;
   region?: string;
   publicUrlBase?: string;
+  // Azure specific
+  connectionString?: string;
+  accountName?: string;
+  accountKey?: string;
 
   // Adapter options
   defaultBucket?: string; // Default bucket when using "_" placeholder

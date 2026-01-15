@@ -9,7 +9,14 @@ import type { StorageErrorCode } from "../providers/storageService";
 /**
  * Provider type supported by Storage Kit.
  */
-export type StorageProvider = "minio" | "backblaze" | "cloudflare-r2";
+export type StorageProvider =
+  | "minio"
+  | "backblaze"
+  | "cloudflare-r2"
+  | "s3"
+  | "gcs"
+  | "spaces"
+  | "azure";
 
 /**
  * Normalized file input from multipart form data.
@@ -29,23 +36,11 @@ export interface UploadedFile {
 /**
  * Configuration options for Storage Kit adapters.
  */
-export interface StorageKitConfig {
+export interface BaseStorageKitConfig {
   // Provider selection (required)
   /** Storage provider type */
   provider: StorageProvider;
-
-  // Provider credentials
-  /** S3-compatible endpoint URL */
-  endpoint?: string;
-  /** Access key ID for authentication */
-  accessKeyId?: string;
-  /** Secret access key for authentication */
-  secretAccessKey?: string;
-  /** AWS region (use 'auto' for R2, 'us-east-1' for MinIO) */
-  region?: string;
-  /** Public URL base for generating file URLs */
-  publicUrlBase?: string;
-
+  
   // Adapter options
   /** Default bucket name when using underscore placeholder */
   defaultBucket?: string;
@@ -63,7 +58,34 @@ export interface StorageKitConfig {
   }) => void;
   /** Callback fired when an error occurs */
   onError?: (error: Error) => void;
+  
+  /** Public URL base for generating file URLs */
+  publicUrlBase?: string;
 }
+
+export interface S3KitConfig extends BaseStorageKitConfig {
+  provider: "minio" | "backblaze" | "cloudflare-r2" | "s3" | "gcs" | "spaces";
+  /** S3-compatible endpoint URL */
+  endpoint?: string;
+  /** Access key ID for authentication */
+  accessKeyId?: string;
+  /** Secret access key for authentication */
+  secretAccessKey?: string;
+  /** AWS region (use 'auto' for R2, 'us-east-1' for MinIO) */
+  region?: string;
+}
+
+export interface AzureKitConfig extends BaseStorageKitConfig {
+  provider: "azure";
+  /** Azure connection string */
+  connectionString?: string;
+  /** Azure storage account name */
+  accountName?: string;
+  /** Azure storage account key */
+  accountKey?: string;
+}
+
+export type StorageKitConfig = S3KitConfig | AzureKitConfig;
 
 /**
  * HTTP response structure for errors.
