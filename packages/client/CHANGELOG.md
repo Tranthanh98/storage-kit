@@ -1,5 +1,11 @@
 # @storage-kit/client
 
+## 4.0.0
+
+### Major Changes
+
+- 0230a77: update multiple provider
+
 ## 3.0.0
 
 ### Major Changes

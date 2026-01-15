@@ -1,5 +1,16 @@
 # @storage-kit/fastify
 
+## 4.0.0
+
+### Major Changes
+
+- 0230a77: update multiple provider
+
+### Patch Changes
+
+- Updated dependencies [0230a77]
+  - @storage-kit/core@4.0.0
+
 ## 3.0.0
 
 ### Major Changes
