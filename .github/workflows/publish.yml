@@ -1,0 +1,67 @@
+name: Publish to npm
+
+on:
+  push:
+    branches:
+      - release
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      id-token: write  # Required for OIDC token request
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm -r build
+
+      - name: Run tests
+        run: pnpm -r test
+
+      - name: Publish packages with provenance
+        run: |
+          publish_if_needed() {
+            local pkg=$1
+            local name=$(node -p "require('./packages/$pkg/package.json').name")
+            local version=$(node -p "require('./packages/$pkg/package.json').version")
+            
+            # Check if this version already exists on npm
+            if npm view "$name@$version" version 2>/dev/null; then
+              echo "⏭️  $name@$version already published, skipping..."
+            else
+              echo "📦 Publishing $name@$version with provenance..."
+              pnpm --filter "$name" publish --access public --no-git-checks --provenance
+            fi
+          }
+          
+          # Publish in dependency order
+          publish_if_needed core
+          publish_if_needed client
+          publish_if_needed express
+          publish_if_needed fastify
+          publish_if_needed hono
+          publish_if_needed nestjs
+        env:
+          # Use NPM_TOKEN for granular token approach
+          # Or remove this line entirely if using trusted publishing (OIDC)
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
