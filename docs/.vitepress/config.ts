@@ -1,6 +1,7 @@
 import { defineConfig } from "vitepress";
 
 export default defineConfig({
+  base: "/storage-kit/",
   title: "Storage Kit",
   description:
     "A unified, framework-agnostic storage service for S3-compatible providers",

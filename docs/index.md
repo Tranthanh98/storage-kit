@@ -12,6 +12,12 @@ hero:
     - theme: alt
       text: API Reference
       link: /api/
+  html: |
+    <p style="display: flex; gap: 6px; justify-content: center; align-items: center; margin-top: 20px;">
+      <a href="https://www.npmjs.com/package/@storage-kit/core"><img src="https://nodei.co/npm/@storage-kit/core.svg?style=shields&data=n,v" alt="npm version" style="border-radius: 6px;"></a>
+      <a href="https://github.com/Tranthanh98/storage-kit"><img src="https://img.shields.io/github/stars/Tranthanh98/storage-kit.svg?style=flat-square&colorA=18181b&colorB=28CF8D" alt="GitHub stars" style="border-radius: 6px;"></a>
+      <a href="https://github.com/Tranthanh98/storage-kit/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@storage-kit/core.svg?style=flat-square&colorA=18181b&colorB=28CF8D" alt="License" style="border-radius: 6px;"></a>
+    </p>
 
 features:
   - title: Unified API
