@@ -12,19 +12,40 @@ pnpm add @storage-kit/fastify @storage-kit/core fastify
 
 ## Quick Start
 
+### Recommended: Centralized Initialization
+
+Create a single `createStorageKit` instance and use it throughout your app:
+
 ```typescript
-import Fastify from "fastify";
-import { storageKitPlugin } from "@storage-kit/fastify";
+// store-kit.ts
+import { createStorageKit } from "@storage-kit/fastify";
 
-const fastify = Fastify();
-
-// Register storage plugin
-fastify.register(storageKitPlugin, {
-  prefix: "/api/storage",
+export const storeKit = createStorageKit({
   provider: "minio",
   endpoint: "http://localhost:9000",
   accessKeyId: "minioadmin",
   secretAccessKey: "minioadmin",
+  defaultBucket: "uploads",
+});
+```
+
+```typescript
+// app.ts
+import Fastify from "fastify";
+import { storeKit } from "./store-kit";
+
+const fastify = Fastify();
+
+// Use as route handler (register as plugin with prefix)
+fastify.register(storeKit.plugin(), { prefix: "/api/storage" });
+
+// Use as service (direct method calls)
+fastify.get("/example/presigned-url", async (request, reply) => {
+  const result = await storeKit.getPresignedUploadUrl("_", "uploads/file.png", {
+    contentType: "image/png",
+    expiresIn: 3600,
+  });
+  return result;
 });
 
 fastify.listen({ port: 3000 }, () => {
@@ -35,17 +56,63 @@ fastify.listen({ port: 3000 }, () => {
 
 **Swagger UI** is automatically available at `/api/storage/reference` - no additional setup required!
 
+## Service Methods
+
+The `createStorageKit` instance provides direct access to storage operations:
+
+```typescript
+import { storeKit } from "./store-kit";
+
+// Upload file programmatically
+const result = await storeKit.uploadFile(
+  "_",
+  buffer,
+  "avatar.png",
+  "users/123"
+);
+
+// Generate presigned URL
+const url = await storeKit.getPresignedUploadUrl("_", "files/doc.pdf", {
+  contentType: "application/pdf",
+  expiresIn: 3600,
+});
+
+// Generate presigned download URL
+const downloadUrl = await storeKit.getPresignedDownloadUrl(
+  "_",
+  "files/doc.pdf"
+);
+
+// Delete file
+await storeKit.deleteFile("_", "users/123/avatar.png");
+
+// Bulk delete
+await storeKit.deleteFiles("_", ["file1.png", "file2.png"]);
+
+// Health check
+const health = await storeKit.healthCheck();
+
+// Get bucket-scoped service
+const avatarStorage = storeKit.bucket("avatars");
+await avatarStorage.uploadFile(buffer, "user123.png");
+
+// Access underlying storage service for advanced operations
+const storageService = storeKit.storage;
+```
+
+> **Note:** Use `"_"` as bucket parameter to use the `defaultBucket` configured during initialization.
+
 ## Endpoints
 
 The plugin implements all endpoints defined in the OpenAPI specification:
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/:bucket/files` | Upload a file |
+| Method   | Path                       | Description          |
+| -------- | -------------------------- | -------------------- |
+| `POST`   | `/:bucket/files`           | Upload a file        |
 | `DELETE` | `/:bucket/files/:filePath` | Delete a single file |
-| `DELETE` | `/:bucket/files` | Bulk delete files |
-| `GET` | `/:bucket/signed-url` | Generate signed URL |
-| `GET` | `/health` | Health check |
+| `DELETE` | `/:bucket/files`           | Bulk delete files    |
+| `GET`    | `/:bucket/signed-url`      | Generate signed URL  |
+| `GET`    | `/health`                  | Health check         |
 
 ## Built-in Swagger UI
 
@@ -54,26 +121,21 @@ The plugin includes a built-in interactive API reference powered by Swagger UI. 
 ### Default Behavior
 
 ```typescript
-fastify.register(storageKitPlugin, {
-  prefix: "/api/storage",
-  provider: "minio",
-  // ... credentials
-});
+fastify.register(storeKit.plugin(), { prefix: "/api/storage" });
 // Swagger UI available at: /api/storage/reference
 ```
 
 ### Customizing Swagger UI
 
 ```typescript
-fastify.register(storageKitPlugin, {
-  prefix: "/api/storage",
+export const storeKit = createStorageKit({
   provider: "minio",
   // ... credentials
   swagger: {
     enabled: true,
-    path: "/docs",           // Custom path (default: "/reference")
+    path: "/docs", // Custom path (default: "/reference")
     title: "My Storage API", // Custom page title
-  }
+  },
 });
 // Swagger UI available at: /api/storage/docs
 ```
@@ -81,11 +143,10 @@ fastify.register(storageKitPlugin, {
 ### Disabling Swagger UI
 
 ```typescript
-fastify.register(storageKitPlugin, {
-  prefix: "/api/storage",
+export const storeKit = createStorageKit({
   provider: "minio",
   // ... credentials
-  swagger: false,  // Disable Swagger UI entirely
+  swagger: false, // Disable Swagger UI entirely
 });
 ```
 
@@ -95,7 +156,6 @@ fastify.register(storageKitPlugin, {
 interface FastifyStorageKitConfig {
   // Required
   provider: "minio" | "backblaze" | "cloudflare-r2";
-  prefix?: string;  // Route prefix (recommended)
 
   // Provider credentials
   endpoint?: string;
@@ -105,16 +165,18 @@ interface FastifyStorageKitConfig {
   publicUrlBase?: string;
 
   // Adapter options
-  defaultBucket?: string;
-  maxFileSize?: number;      // Max file size in bytes (default: 10MB)
+  defaultBucket?: string; // Default bucket when using "_" placeholder
+  maxFileSize?: number; // Max file size in bytes (default: 10MB)
   allowedMimeTypes?: string[];
 
   // Swagger UI options
-  swagger?: boolean | {
-    enabled?: boolean;       // Enable/disable (default: true)
-    path?: string;           // URL path (default: "/reference")
-    title?: string;          // Page title
-  };
+  swagger?:
+    | boolean
+    | {
+        enabled?: boolean; // Enable/disable (default: true)
+        path?: string; // URL path (default: "/reference")
+        title?: string; // Page title
+      };
 
   // Hooks
   onUploadComplete?: (result) => void;
@@ -152,6 +214,21 @@ curl "http://localhost:3000/api/storage/my-bucket/signed-url?key=file.png&type=u
 - Uses `@fastify/multipart` for efficient file streaming
 - Built-in schema validation
 - Automatic error handling with proper HTTP status codes
+
+## Legacy API (Deprecated)
+
+The `storageKitPlugin()` function is deprecated. Please use `createStorageKit()` instead:
+
+```typescript
+// ❌ Deprecated
+import { storageKitPlugin } from "@storage-kit/fastify";
+fastify.register(storageKitPlugin, { prefix: "/api/storage", ... });
+
+// ✅ Recommended
+import { createStorageKit } from "@storage-kit/fastify";
+const storeKit = createStorageKit({ ... });
+fastify.register(storeKit.plugin(), { prefix: "/api/storage" });
+```
 
 ## License
 

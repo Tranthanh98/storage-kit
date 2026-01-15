@@ -5,10 +5,10 @@
  * Access the API documentation at: http://localhost:3000/api/storage/reference
  */
 
-import { createStorageKit } from "@storage-kit/express";
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import { storeKit } from "./store-kit";
 
 // Load environment variables
 dotenv.config();
@@ -19,21 +19,6 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-
-// ============================================
-// Create Storage Kit Instance (centralized initialization)
-// This instance can be used both as route handler and as service
-// ============================================
-export const storeKit = createStorageKit({
-  provider: "minio",
-  endpoint: process.env.MINIO_ENDPOINT || "http://localhost:9000",
-  accessKeyId: process.env.MINIO_ACCESS_KEY || "minioadmin",
-  secretAccessKey: process.env.MINIO_SECRET_KEY || "minioadmin",
-  defaultBucket: "test-bucket",
-  // Swagger UI is enabled by default at /reference
-  // To customize: swagger: { path: "/docs", title: "My API" }
-  // To disable: swagger: false
-});
 
 // ============================================
 // Storage Kit API at /api/storage
