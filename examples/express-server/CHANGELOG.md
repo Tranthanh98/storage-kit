@@ -1,5 +1,12 @@
 # storage-kit-example-express
 
+## 2.0.1
+
+### Patch Changes
+
+- Updated dependencies [d23ddca]
+  - @storage-kit/express@3.0.0
+
 ## 2.0.0
 
 ### Major Changes

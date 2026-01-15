@@ -1,5 +1,16 @@
 # @storage-kit/nestjs
 
+## 3.0.0
+
+### Major Changes
+
+- d23ddca: Support Google storage, aws s3, Azure storage, Digital Ocean Storage
+
+### Patch Changes
+
+- Updated dependencies [d23ddca]
+  - @storage-kit/core@3.0.0
+
 ## 2.0.0
 
 ### Major Changes
