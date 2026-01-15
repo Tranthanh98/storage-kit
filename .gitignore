@@ -104,8 +104,9 @@ dist
 # vuepress build output
 .vuepress/dist
 
-# vuepress v2.x temp and cache directory
-.temp
+# VitePress cache and dist
+.vitepress/cache
+.vitepress/dist
 
 # Docusaurus cache and generated files
 .docusaurus
@@ -153,3 +154,17 @@ dist
 ### AI/Agent Tools ###
 .agent/
 .opencode/
+docs/.vitepress/cache/deps/_metadata.json
+docs/.vitepress/cache/deps/@theme_index.js
+docs/.vitepress/cache/deps/@theme_index.js.map
+docs/.vitepress/cache/deps/chunk-CN42XFKG.js
+docs/.vitepress/cache/deps/chunk-CN42XFKG.js.map
+docs/.vitepress/cache/deps/chunk-Y3A3J5YD.js
+docs/.vitepress/cache/deps/chunk-Y3A3J5YD.js.map
+docs/.vitepress/cache/deps/package.json
+docs/.vitepress/cache/deps/vitepress___@vue_devtools-api.js
+docs/.vitepress/cache/deps/vitepress___@vue_devtools-api.js.map
+docs/.vitepress/cache/deps/vitepress___@vueuse_core.js
+docs/.vitepress/cache/deps/vitepress___@vueuse_core.js.map
+docs/.vitepress/cache/deps/vue.js
+docs/.vitepress/cache/deps/vue.js.map
